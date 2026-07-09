@@ -24,10 +24,29 @@ LIVE_MODELS = {
 LIVE_MODEL = "htdemucs"          # padrão
 
 # Janela deslizante da separação ao vivo.
-# Latência ≈ LIVE_WINDOW_SEC; overlap de 50% (hop = janela/2) dá overlap-add
-# perfeito com janela de Hann. Janela menor = menos latência, menos qualidade.
-LIVE_WINDOW_SEC = 4.0
-LIVE_HOP_SEC = 2.0
+# Latência ≈ LIVE_WINDOW_SEC (NÃO é o tempo de processamento; é o algoritmo:
+# a janela precisa encher antes da 1ª separação). Overlap de 50% (hop = janela/2)
+# dá overlap-add perfeito com Hann. Janela menor = menos latência, menos qualidade.
+LIVE_WINDOW_SEC = 2.0            # padrão (antes 4.0)
+LIVE_HOP_SEC = 1.0
+
+# Opções de latência ao vivo expostas na UI (rótulo -> janela em segundos).
+LIVE_WINDOW_OPTIONS = {
+    "Baixa · ~1s": 1.0,
+    "Média · ~2s": 2.0,
+    "Alta · ~3s (+qualidade)": 3.0,
+}
+
+# Ordem de exibição dos faders na UI: voz primeiro, "outros" por último.
+STEM_ORDER = ["vocals", "drums", "bass", "guitar", "piano", "other"]
+
+
+def order_stems(names):
+    """Reordena os stems para exibição: voz primeiro, 'outros' por último."""
+    known = [s for s in STEM_ORDER if s in names]
+    rest = [s for s in names if s not in STEM_ORDER]
+    return known + rest
+
 
 # Nomes dos stems por modelo (a ordem real vem do próprio modelo em runtime).
 STEM_LABELS = {

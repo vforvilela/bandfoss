@@ -58,14 +58,18 @@ class LiveEngine:
         self._pacat: Optional[subprocess.Popen] = None
         self._pump_thread: Optional[threading.Thread] = None
 
+        self._nstems = len(self.names)
+
         # Hann PERIÓDICO (não o np.hanning): garante overlap-add constante
         # (COLA = 1) no hop de 50%, sem ripple de amplitude entre janelas.
         w = 0.5 - 0.5 * np.cos(2 * np.pi * np.arange(self.W) / self.W)
-        self._hann = w.astype(np.float32)[:, None]
-        self._carry = np.zeros((self.H, CHANNELS), dtype=np.float32)
+        self._hann = w.astype(np.float32)[None, :, None]        # [1, W, 1]
+        self._carry = np.zeros((self._nstems, self.H, CHANNELS), dtype=np.float32)
         self._window = np.zeros((self.W, CHANNELS), dtype=np.float32)
 
-        self.out_ring = FloatRing(int(4 * samplerate), CHANNELS)
+        # O ring guarda os stems SEPARADOS (overlap-added), não o mix. O ganho é
+        # aplicado só na saída (a cada bloco) -> faders/mute respondem na hora.
+        self.out_ring = FloatRing(int(4 * samplerate), self._nstems * CHANNELS)
         self._stop = threading.Event()
         self._thread: Optional[threading.Thread] = None
         self._stream: Optional[sd.OutputStream] = None
@@ -92,24 +96,28 @@ class LiveEngine:
         if first is None:
             return False
         self._window = first
-        self._carry = np.zeros((self.H, CHANNELS), dtype=np.float32)
+        self._carry = np.zeros((self._nstems, self.H, CHANNELS), dtype=np.float32)
         return True
 
     def step(self) -> Optional[np.ndarray]:
-        """Processa a janela atual, emite H frames e desliza. None = fim."""
+        """Separa a janela, emite H frames por stem (empacotados) e desliza.
+
+        NÃO aplica ganho aqui — o mix por fader é feito na saída, por bloco.
+        Retorna [H, n_stems*2] ou None no fim.
+        """
         stems = self._sep.separate(self._window, fast=True)
         stacked = np.stack([stems[n] for n in self.names])   # [S, W, 2]
-        mixed = self.gains.mix(stacked) * self._hann          # [W, 2]
+        windowed = stacked * self._hann                       # [S, W, 2] (Hann)
 
-        out = self._carry + mixed[: self.H]
-        np.clip(out, -1.0, 1.0, out=out)
-        self._carry = mixed[self.H:].copy()
+        out = self._carry + windowed[:, : self.H, :]          # [S, H, 2] overlap-add
+        self._carry = windowed[:, self.H:, :].copy()
 
         nxt = self._cap.read_exact(self.H)
         if nxt is None:
             return None
         self._window = np.concatenate([self._window[self.H:], nxt], axis=0)
-        return out
+        # empacota [S, H, 2] -> [H, S*2] para o ring
+        return np.transpose(out, (1, 0, 2)).reshape(self.H, self._nstems * CHANNELS)
 
     def _loop(self) -> None:
         try:
@@ -126,21 +134,30 @@ class LiveEngine:
             self.out_ring.close()
 
     # ---- saída de áudio ---------------------------------------------------
+    def _mix_block(self, packed: np.ndarray) -> np.ndarray:
+        """[n, n_stems*2] -> [n, 2] aplicando os ganhos ATUAIS (mute/solo)."""
+        n = packed.shape[0]
+        frames = packed.reshape(n, self._nstems, CHANNELS)   # [n, S, 2]
+        g = self.gains.vector()                              # [S] (efetivo)
+        mix = np.tensordot(frames, g, axes=(1, 0)).astype(np.float32)  # [n, 2]
+        np.clip(mix, -1.0, 1.0, out=mix)
+        return mix
+
     def _output_callback(self, outdata, frames, time_info, status):  # noqa: ANN001
         chunk, avail = self.out_ring.read(frames, block=False)
         if avail < frames:
             self.underruns += 1
-        outdata[:] = chunk
+        outdata[:] = self._mix_block(chunk)
 
     def _pump_to_pacat(self) -> None:
-        """Lê o out_ring e escreve no pacat (saída no sink real, sem loop)."""
+        """Lê o out_ring, mixa com os ganhos atuais e escreve no pacat."""
         try:
             while not self._stop.is_set():
                 chunk, avail = self.out_ring.read(BLOCK_SIZE, block=True)
                 if avail == 0:            # ring fechado e vazio -> fim
                     break
                 try:
-                    self._pacat.stdin.write(chunk.tobytes())
+                    self._pacat.stdin.write(self._mix_block(chunk).tobytes())
                 except (BrokenPipeError, ValueError):
                     break
         finally:

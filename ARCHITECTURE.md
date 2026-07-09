@@ -131,6 +131,18 @@ Hann periódico (`0.5 - 0.5·cos(2πn/W)`) soma constante (COLA = 1) no hop de 5
 então a reconstrução é exata e sem *pumping* de amplitude entre janelas — a janela
 também atenua os artefatos de borda do Demucs.
 
+**Latência vs. responsividade dos controles (dois atrasos distintos):**
+
+- *Latência do áudio* ≈ tamanho da janela `W` (a janela precisa encher antes da 1ª
+  separação). NÃO é o tempo de GPU (~300 ms). Por isso é ajustável na UF (1/2/3 s):
+  janela menor = menos atraso, separação um pouco pior. A GPU tem folga de sobra.
+- *Responsividade dos controles* — os stems separados vão para o ring **sem ganho**;
+  o mix por fader/mute/solo é aplicado **na saída, por bloco (~23 ms)**. Assim mexer
+  num fader afeta o próximo bloco imediatamente, independente da janela/hop. (Antes o
+  ganho era aplicado na separação, atrasando os controles em até um hop.)
+
+Ordem dos faders na UI: **voz primeiro, "outros" por último** (`order_stems`).
+
 ## Riscos / decisões registradas
 
 1. **Legal/ToS:** captura via monitor PipeWire é a rota principal; downloaders são

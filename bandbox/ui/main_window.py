@@ -30,10 +30,12 @@ from PySide6.QtWidgets import (
 from ..config import (
     DEFAULT_MODEL,
     LIVE_MODELS,
+    LIVE_WINDOW_OPTIONS,
     LIVE_WINDOW_SEC,
     PRESETS,
     SAMPLE_RATE,
     STEM_LABELS,
+    order_stems,
 )
 from ..engine.mixer import StemMixer
 
@@ -206,6 +208,18 @@ class MainWindow(QWidget):
             "especificamente a guitarra gravada da faixa (um pouco mais lento)."
         )
 
+        # seletor de latência (tamanho da janela) — menor = menos atraso
+        self.latency_box = QComboBox()
+        self.latency_box.addItems(LIVE_WINDOW_OPTIONS.keys())
+        self.latency_box.setToolTip(
+            "Atraso do áudio ao vivo = tamanho da janela do Demucs (não é o\n"
+            "processamento). Menor = mais responsivo; maior = melhor separação."
+        )
+        # seleciona a opção que casa com o padrão
+        for i, (lbl, sec) in enumerate(LIVE_WINDOW_OPTIONS.items()):
+            if sec == LIVE_WINDOW_SEC:
+                self.latency_box.setCurrentIndex(i)
+
         self.live_btn = QPushButton("🔴 Capturar ao vivo")
         self.live_btn.setCheckable(True)
         self.live_btn.toggled.connect(self._toggle_live)
@@ -216,6 +230,7 @@ class MainWindow(QWidget):
         live_row.addWidget(self.refresh_btn)
         live_row.addWidget(self.monitor_box, 1)
         live_row.addWidget(self.live_model_box)
+        live_row.addWidget(self.latency_box)
         live_row.addWidget(self.live_btn)
         live_row.addWidget(self.live_status)
         root.addLayout(live_row)
@@ -320,7 +335,7 @@ class MainWindow(QWidget):
 
         self.mixer = StemMixer(stems, samplerate=samplerate)
         self._target = self.mixer
-        for name in self.mixer.names:
+        for name in order_stems(self.mixer.names):
             strip = StemStrip(name, self._set_gain, self._set_mute, self._set_solo)
             self.strips[name] = strip
             self.strip_row.addWidget(strip)
@@ -420,6 +435,7 @@ class MainWindow(QWidget):
         self.live_btn.setText("Carregando…")
         self.live_btn.setEnabled(False)
         self.live_model_box.setEnabled(False)
+        self.latency_box.setEnabled(False)
         self.live_status.setText("Carregando modelo ao vivo…")
 
         model_name = LIVE_MODELS[self.live_model_box.currentText()]
@@ -434,6 +450,7 @@ class MainWindow(QWidget):
         self.live_btn.setText("🔴 Capturar ao vivo")
         self.live_btn.setChecked(False)
         self.live_model_box.setEnabled(True)
+        self.latency_box.setEnabled(True)
         self.separate_btn.setEnabled(True)
         QMessageBox.critical(self, "Falha na captura ao vivo", msg)
 
@@ -460,16 +477,17 @@ class MainWindow(QWidget):
                     device = None
 
             self.capture = LiveCapture(device=device)
-            window_frames = int(LIVE_WINDOW_SEC * SAMPLE_RATE)
+            window_sec = LIVE_WINDOW_OPTIONS[self.latency_box.currentText()]
+            window_frames = int(window_sec * SAMPLE_RATE)
             self.engine = LiveEngine(
                 separator, self.capture, window_frames=window_frames,
                 samplerate=SAMPLE_RATE, output_sink=output_sink,
             )
             self._target = self.engine
 
-            # monta os faders a partir dos stems do modelo
+            # monta os faders (voz primeiro, "outros" por último)
             self._clear_strips()
-            for name in self.engine.names:
+            for name in order_stems(self.engine.names):
                 strip = StemStrip(name, self._set_gain, self._set_mute, self._set_solo)
                 self.strips[name] = strip
                 self.strip_row.addWidget(strip)
@@ -512,6 +530,7 @@ class MainWindow(QWidget):
         self.live_btn.setText("🔴 Capturar ao vivo")
         self.live_btn.setChecked(False)
         self.live_model_box.setEnabled(True)
+        self.latency_box.setEnabled(True)
         self.live_status.setText("")
         self.separate_btn.setEnabled(True)
 
