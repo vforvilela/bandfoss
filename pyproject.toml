@@ -1,0 +1,31 @@
+[project]
+name = "bandbox"
+version = "0.1.0"
+description = "Desktop stem separation & mixer (open source BandBox-style), Linux + CUDA"
+requires-python = ">=3.10"
+dependencies = [
+    # Núcleo de separação
+    "demucs>=4.0.1",
+    "torch>=2.1",
+    "torchaudio>=2.1",
+    # Áudio / DSP
+    "numpy>=1.24",
+    "soundfile>=0.12",
+    "sounddevice>=0.4.6",
+    # UI
+    "PySide6>=6.6",
+]
+
+[project.optional-dependencies]
+# yt-dlp normalmente vem instalado no sistema; incluído aqui para ambientes isolados.
+download = ["yt-dlp>=2024.1"]
+
+[project.scripts]
+bandbox = "bandbox.app:main"
+
+[build-system]
+requires = ["setuptools>=68"]
+build-backend = "setuptools.build_meta"
+
+[tool.setuptools.packages.find]
+include = ["bandbox*"]

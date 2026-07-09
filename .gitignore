@@ -1,0 +1,27 @@
+# Python
+__pycache__/
+*.py[cod]
+*.egg-info/
+build/
+dist/
+
+# Ambiente virtual
+.venv/
+venv/
+
+# Modelos Demucs baixados / cache
+models/
+*.th
+
+# Áudio de teste / saídas
+*.wav
+*.mp3
+*.flac
+*.m4a
+*.ogg
+*.opus
+
+# Editores / SO
+.vscode/
+.idea/
+.DS_Store
