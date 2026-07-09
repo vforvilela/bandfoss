@@ -48,21 +48,11 @@ _STRINGS = {
             "On: only the chosen app is processed; your live instrument and other\n"
             "apps stay untouched. Off: captures the Monitor below (may echo)."
         ),
-        # presets / mixer
-        "preset_label": "Preset:",
+        # mixer
         "footer_prefix": "BandFOSS · free software · by ",
         # stems
         "stem_vocals": "Vocals", "stem_drums": "Drums", "stem_bass": "Bass",
         "stem_other": "Other", "stem_guitar": "Guitar", "stem_piano": "Piano",
-        # presets
-        "preset_original": "Original",
-        "preset_karaoke": "Karaoke (no vocals)",
-        "preset_no_drums": "Drummer (no drums)",
-        "preset_no_bass": "Bassist (no bass)",
-        "preset_no_guitar": "Guitarist (no guitar)",
-        "preset_no_piano": "Keys (no piano)",
-        "preset_acapella": "Vocals only (a cappella)",
-        "preset_instrumental": "Instrumental",
         # modelos
         "model_fast4": "Fast · 4 stems",
         "model_guitar6": "Guitar · 6 stems",
@@ -106,18 +96,9 @@ _STRINGS = {
             "Ligado: processa só o app escolhido; seu instrumento ao vivo e os demais\n"
             "apps seguem intactos. Desligado: captura o Monitor abaixo (pode ter eco)."
         ),
-        "preset_label": "Preset:",
         "footer_prefix": "BandFOSS · software livre · feito por ",
         "stem_vocals": "Vocal", "stem_drums": "Bateria", "stem_bass": "Baixo",
         "stem_other": "Outros", "stem_guitar": "Guitarra", "stem_piano": "Piano",
-        "preset_original": "Original",
-        "preset_karaoke": "Karaokê (sem vocal)",
-        "preset_no_drums": "Baterista (sem bateria)",
-        "preset_no_bass": "Baixista (sem baixo)",
-        "preset_no_guitar": "Guitarrista (sem guitarra)",
-        "preset_no_piano": "Tecladista (sem piano)",
-        "preset_acapella": "Só vocal (a capella)",
-        "preset_instrumental": "Instrumental",
         "model_fast4": "Rápido · 4 stems",
         "model_guitar6": "Guitarra · 6 stems",
         "latency_low": "Baixa · ~1s",

@@ -62,15 +62,3 @@ STEM_COLORS = {
     "piano": "#C77DFF",    # lilás — piano
 }
 
-# Presets: id -> stems a serem MUTADOS ao ativar. Um por instrumento — toque/cante
-# por cima. Rótulo vem do i18n (preset_<id>). guitar/piano só existem no modelo 6s.
-PRESETS = {
-    "original": [],
-    "karaoke": ["vocals"],
-    "no_drums": ["drums"],
-    "no_bass": ["bass"],
-    "no_guitar": ["guitar"],
-    "no_piano": ["piano"],
-    "acapella": ["drums", "bass", "other", "guitar", "piano"],
-    "instrumental": ["vocals"],
-}

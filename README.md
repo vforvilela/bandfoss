@@ -63,16 +63,15 @@ bandfoss
 2. In **Source**, pick/type the app (e.g. `Chrome`) and click **● Capture live**.
    - You can click **before** hitting play: as soon as the app starts, BandFOSS grabs
      its audio automatically.
-3. Move the **faders**, use **M** (mute) / **S** (solo), or pick a **Preset**
-   (Karaoke, no drums…). Muted/soloed channels dim so you can see what's audible at a
-   glance.
+3. Move the **faders** and use **M** (mute) / **S** (solo) on each stem. Muted/soloed
+   channels dim so you can see what's audible at a glance.
 
 Stop anytime and your audio returns to normal.
 
 ### 🎶 Play along — any instrument
 
-Mute **your** instrument's stem and play/sing over it: Karaoke (no vocals), Drummer
-(no drums), Bassist (no bass), Guitarist / Keys.
+Mute **your** instrument's stem (tap **M**) and play/sing over the rest — drums, bass,
+guitar, keys, or vocals.
 
 > To split **guitar** and **piano** separately, open **Advanced** and choose the
 > **Guitar · 6 stems** model (the fast 4-stem one keeps guitar and keys inside

@@ -1,7 +1,7 @@
 """Janela principal do BandFOSS (PySide6) — captura e separação AO VIVO.
 
 Fluxo: escolher o app -> capturar do PipeWire -> separar em tempo real ->
-mixer com fader + mute/solo por stem + presets.
+mixer com fader + mute/solo por stem.
 """
 
 from __future__ import annotations
@@ -32,7 +32,6 @@ from ..config import (
     LIVE_MODELS,
     LIVE_WINDOW_SEC,
     LIVE_WINDOWS,
-    PRESETS,
     SAMPLE_RATE,
     STEM_COLORS,
     order_stems,
@@ -216,18 +215,6 @@ class MainWindow(QWidget):
         strip_frame.setMinimumHeight(280)
         root.addWidget(strip_frame, 1)
 
-        # --- presets ---
-        preset_row = QHBoxLayout()
-        preset_row.addWidget(QLabel(t("preset_label")))
-        self.preset_box = QComboBox()
-        for pid in PRESETS:
-            self.preset_box.addItem(t(f"preset_{pid}"), userData=pid)
-        self.preset_box.currentIndexChanged.connect(self._apply_preset)
-        self.preset_box.setEnabled(False)
-        preset_row.addWidget(self.preset_box)
-        preset_row.addStretch(1)
-        root.addLayout(preset_row)
-
         # --- footer: crédito + link ---
         footer = QLabel(
             f"<span style='color:{theme.MUTED}'>{t('footer_prefix')}</span>"
@@ -396,8 +383,6 @@ class MainWindow(QWidget):
                 self.strips[name] = strip
                 self.strip_row.addWidget(strip)
             self._update_strip_states()
-            self.preset_box.setEnabled(True)
-            self.preset_box.setCurrentIndex(0)   # "original"
 
             self.capture.start()
             self.engine.start()
@@ -429,7 +414,6 @@ class MainWindow(QWidget):
         self.router = None
         self._target = None
         self._clear_strips()
-        self.preset_box.setEnabled(False)
         self.live_btn.setText(t("capture_start"))
         self.live_btn.setChecked(False)
         self.live_model_box.setEnabled(True)
@@ -461,15 +445,6 @@ class MainWindow(QWidget):
             self._target.set_solo(name)
         else:
             self._target.set_solo(None)
-        self._update_strip_states()
-
-    def _apply_preset(self, *_args) -> None:
-        if not self._target:
-            return
-        pid = self.preset_box.currentData()
-        mute_set = set(PRESETS.get(pid, []))
-        for name, strip in self.strips.items():
-            strip.mute_btn.setChecked(name in mute_set)
         self._update_strip_states()
 
     def _update_strip_states(self) -> None:
