@@ -17,6 +17,7 @@ from PySide6.QtWidgets import (
     QCheckBox,
     QComboBox,
     QFrame,
+    QGraphicsOpacityEffect,
     QGridLayout,
     QHBoxLayout,
     QLabel,
@@ -124,6 +125,15 @@ class StemStrip(QWidget):
         layout.addWidget(self.value_label)
         layout.addLayout(btn_row)
         layout.addWidget(title)
+
+        # esmaece a coluna inteira quando o canal não está audível
+        self._opacity = QGraphicsOpacityEffect(self)
+        self.setGraphicsEffect(self._opacity)
+        self._opacity.setOpacity(1.0)
+
+    def set_active(self, active: bool) -> None:
+        """Aceso (audível) = opaco; apagado (mudo ou silenciado por solo) = esmaecido."""
+        self._opacity.setOpacity(1.0 if active else 0.28)
 
 
 class MainWindow(QWidget):
@@ -395,6 +405,7 @@ class MainWindow(QWidget):
                                   color=STEM_COLORS.get(name, theme.AMBER))
                 self.strips[name] = strip
                 self.strip_row.addWidget(strip)
+            self._update_strip_states()
             self.preset_box.setEnabled(True)
             self.preset_box.setCurrentText("Original")
 
@@ -449,6 +460,7 @@ class MainWindow(QWidget):
     def _set_mute(self, name: str, muted: bool) -> None:
         if self._target:
             self._target.set_muted(name, muted)
+        self._update_strip_states()
 
     def _set_solo(self, name: str, on: bool) -> None:
         if not self._target:
@@ -460,6 +472,7 @@ class MainWindow(QWidget):
             self._target.set_solo(name)
         else:
             self._target.set_solo(None)
+        self._update_strip_states()
 
     def _apply_preset(self, preset: str) -> None:
         if not self._target:
@@ -467,6 +480,17 @@ class MainWindow(QWidget):
         mute_set = set(PRESETS.get(preset, []))
         for name, strip in self.strips.items():
             strip.mute_btn.setChecked(name in mute_set)
+        self._update_strip_states()
+
+    def _update_strip_states(self) -> None:
+        """Esmaece as colunas que não estão audíveis (mute, ou silenciadas por solo)."""
+        soloed = next((n for n, s in self.strips.items() if s.solo_btn.isChecked()), None)
+        for name, strip in self.strips.items():
+            if soloed is not None:
+                audible = name == soloed
+            else:
+                audible = not strip.mute_btn.isChecked()
+            strip.set_active(audible)
 
     def closeEvent(self, event):  # noqa: ANN001, N802
         if self.engine:
