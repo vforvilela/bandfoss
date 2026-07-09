@@ -49,12 +49,15 @@ class Separator:
         pcm: np.ndarray,
         progress: ProgressCb = None,
         fast: bool = False,
+        shifts: Optional[int] = None,
     ) -> Dict[str, np.ndarray]:
         """Separa PCM [amostras, 2] float32 em {nome_stem: [amostras, 2] float32}.
 
         `progress` recebe um float 0.0..1.0 (aproximado) durante o processamento.
         `fast=True` (usado ao vivo): processa a janela inteira sem split/overlap,
         priorizando latência sobre qualidade máxima.
+        `shifts`: passadas com deslocamento aleatório (média reduz artefatos). Se
+        None, usa 0 no modo fast e 1 caso contrário.
         """
         from demucs.apply import apply_model
 
@@ -74,12 +77,13 @@ class Separator:
         if progress:
             progress(0.05)
 
+        n_shifts = shifts if shifts is not None else (0 if fast else 1)
         with torch.no_grad():
             sources = apply_model(
                 self.model,
                 wav,
                 device=self.device,
-                shifts=0 if fast else 1,
+                shifts=n_shifts,
                 split=not fast,
                 overlap=0.0 if fast else 0.25,
                 progress=False,

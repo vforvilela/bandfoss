@@ -31,11 +31,17 @@ LIVE_WINDOW_SEC = 2.0            # padrão (antes 4.0)
 LIVE_HOP_SEC = 1.0
 
 # Opções de latência ao vivo expostas na UI (rótulo -> janela em segundos).
+# Janela maior = mais contexto = melhor separação (e mais atraso).
 LIVE_WINDOW_OPTIONS = {
     "Baixa · ~1s": 1.0,
     "Média · ~2s": 2.0,
-    "Alta · ~3s (+qualidade)": 3.0,
+    "Alta · ~3s": 3.0,
+    "Máxima · ~6s (+qualidade)": 6.0,
 }
+
+# "shifts" do Demucs no modo ao vivo: passadas com deslocamento aleatório, cuja
+# média reduz artefatos. Mais = melhor e mais lento. A RTX 4080 aguenta com folga.
+LIVE_SHIFTS = 2
 
 # Ordem de exibição dos faders na UI: voz primeiro, "outros" por último.
 STEM_ORDER = ["vocals", "drums", "bass", "guitar", "piano", "other"]

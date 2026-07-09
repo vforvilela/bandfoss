@@ -19,7 +19,7 @@ from typing import List, Optional, Protocol
 import numpy as np
 import sounddevice as sd
 
-from ..config import BLOCK_SIZE, CHANNELS, SAMPLE_RATE
+from ..config import BLOCK_SIZE, CHANNELS, LIVE_SHIFTS, SAMPLE_RATE
 from .gains import StemGains
 from .ring import FloatRing
 
@@ -105,7 +105,7 @@ class LiveEngine:
         NÃO aplica ganho aqui — o mix por fader é feito na saída, por bloco.
         Retorna [H, n_stems*2] ou None no fim.
         """
-        stems = self._sep.separate(self._window, fast=True)
+        stems = self._sep.separate(self._window, fast=True, shifts=LIVE_SHIFTS)
         stacked = np.stack([stems[n] for n in self.names])   # [S, W, 2]
         windowed = stacked * self._hann                       # [S, W, 2] (Hann)
 
