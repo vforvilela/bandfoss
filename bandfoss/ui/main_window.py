@@ -6,6 +6,8 @@ um fader + mute/solo por stem, transporte e presets.
 
 from __future__ import annotations
 
+import platform
+import re
 from typing import Dict, Optional
 
 import numpy as np
@@ -229,6 +231,9 @@ class MainWindow(QWidget):
         live_row.addWidget(QLabel("App:"))
         self.app_box = AppComboBox(self._populate_apps)
         self.app_box.setMinimumWidth(220)
+        self.app_box.setEditable(True)          # pode digitar um app que ainda não toca
+        self.app_box.setInsertPolicy(QComboBox.NoInsert)
+        self.app_box.lineEdit().setPlaceholderText("ex.: Chrome")
         self._populate_apps()
         self.live_btn = QPushButton("● Capturar ao vivo")
         self.live_btn.setObjectName("recordBtn")
@@ -288,10 +293,31 @@ class MainWindow(QWidget):
         self.transport_widget.setVisible(False)   # aparece após separar um arquivo
         root.addWidget(self.transport_widget)
 
+        # --- footer: crédito + link ---
+        footer = QLabel(
+            f"<span style='color:{theme.MUTED}'>BandFOSS · software livre · feito por </span>"
+            f"<a href='https://github.com/vforvilela' "
+            f"style='color:{theme.AMBER}; text-decoration:none'>vforvilela</a>"
+        )
+        footer.setObjectName("footer")
+        footer.setOpenExternalLinks(True)
+        footer.setAlignment(Qt.AlignRight)
+        footer.setStyleSheet("font-size: 11px;")
+        root.addWidget(footer)
+
         # timer para atualizar posição/tempo
         self._timer = QTimer(self)
         self._timer.setInterval(200)
         self._timer.timeout.connect(self._tick)
+
+        # captura ao vivo depende do PipeWire (Linux). Fora do Linux, só offline.
+        if platform.system() != "Linux":
+            self.app_box.setEnabled(False)
+            self.live_btn.setEnabled(False)
+            self.live_btn.setToolTip(
+                "Captura ao vivo requer Linux (PipeWire). Veja o README."
+            )
+            self.live_status.setText("ao vivo: só Linux por enquanto")
 
     # ---- painel avançado --------------------------------------------------
     def _build_advanced_panel(self) -> QWidget:
@@ -464,22 +490,26 @@ class MainWindow(QWidget):
             self.monitor_box.addItem("(monitor padrão)")
 
     def _populate_apps(self) -> None:
-        """Lista os apps tocando agora; pré-seleciona um navegador se houver."""
+        """Lista os apps tocando agora; preserva o que o usuário digitou."""
+        typed = self.app_box.currentText().strip() if self.app_box.isEditable() else ""
         self.app_box.clear()
         try:
             from ..capture.router import list_playback_apps
             apps = list_playback_apps()
         except Exception:  # noqa: BLE001
             apps = []
-        if not apps:
-            self.app_box.addItem("(nenhum app tocando)", userData=None)
-            return
         browser_idx = 0
         for i, a in enumerate(apps):
             self.app_box.addItem(f"{a['label']} (#{a['id']})", userData=a["label"])
             if any(b in a["label"].lower() for b in ("chrom", "firefox", "brave", "edge")):
                 browser_idx = i
-        self.app_box.setCurrentIndex(browser_idx)
+        # preserva texto digitado; senão pré-seleciona um navegador; senão sugere Chrome
+        if typed:
+            self.app_box.setCurrentText(typed)
+        elif apps:
+            self.app_box.setCurrentIndex(browser_idx)
+        else:
+            self.app_box.setCurrentText("")   # placeholder "ex.: Chrome" aparece
 
     def _on_isolate_toggled(self, on: bool) -> None:
         # isolado -> usa o App (linha principal); sem isolar -> usa o Monitor
@@ -532,12 +562,13 @@ class MainWindow(QWidget):
         try:
             output_sink = None
             if self.isolate_chk.isChecked():
-                # sink virtual: move só o app escolhido, toca no alto-falante real
+                # sink virtual: captura só o app escolhido (digitado ou selecionado)
                 app_match = self.app_box.currentData()
                 if not app_match:
-                    raise RuntimeError(
-                        "Nenhum app selecionado. Comece a tocar no Chrome e clique ↻."
-                    )
+                    app_match = re.sub(r"\s*\(#\d+\)\s*$", "",
+                                       self.app_box.currentText()).strip()
+                if not app_match:
+                    raise RuntimeError("Informe o app a capturar (ex.: Chrome).")
                 self.router = PipeWireRouter()
                 device, output_sink = self.router.setup(app_match)
             else:

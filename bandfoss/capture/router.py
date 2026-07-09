@@ -14,6 +14,7 @@ from __future__ import annotations
 import re
 import shutil
 import subprocess
+import threading
 from typing import Dict, List, Optional, Tuple
 
 
@@ -62,6 +63,9 @@ class PipeWireRouter:
         self.module_id: Optional[str] = None
         self.real_sink: Optional[str] = None
         self._moved_ids: List[str] = []
+        self._needle: str = ""
+        self._watch_proc: Optional[subprocess.Popen] = None
+        self._watch_thread: Optional[threading.Thread] = None
 
     def _modules_for_our_sink(self) -> List[str]:
         """IDs de módulos null-sink já criados com o nosso sink_name (sobras)."""
@@ -121,13 +125,47 @@ class PipeWireRouter:
             if "\t" in l and l.split("\t")[1] == str(idx)
         ]
 
-    def setup(self, app_match: str) -> Tuple[str, str]:
-        """Cria o sink virtual e move só os streams do app `app_match` para ele.
+    def _input_sink_map(self) -> Dict[str, str]:
+        """{id_do_stream: índice_do_sink} para todos os sink-inputs."""
+        out = subprocess.check_output(
+            [self._pactl, "list", "sink-inputs", "short"], text=True
+        )
+        m = {}
+        for line in out.splitlines():
+            parts = line.split("\t")
+            if len(parts) >= 2:
+                m[parts[0]] = parts[1]
+        return m
 
-        `app_match` é comparado (case-insensitive, substring) contra o nome/binário
-        do aplicativo. Retorna (monitor_para_capturar, sink_real_para_a_saida).
-        NÃO altera o sink padrão — guitarra e demais apps seguem intactos.
+    def _move_matching(self) -> int:
+        """Move para o sink virtual os streams do app que ainda não estão nele."""
+        vidx = self._virtual_sink_index()
+        if vidx is None:
+            return 0
+        sinks = self._input_sink_map()
+        moved = 0
+        for a in list_playback_apps():
+            hay = f"{a['app']} {a['binary']} {a['media']}".lower()
+            if self._needle in hay and sinks.get(a["id"]) != vidx:
+                r = subprocess.run(
+                    [self._pactl, "move-sink-input", a["id"], self.sink_name],
+                    check=False,
+                )
+                if r.returncode == 0:
+                    moved += 1
+        return moved
+
+    def setup(self, app_match: str) -> Tuple[str, str]:
+        """Cria o sink virtual e passa a capturar SÓ o app `app_match`.
+
+        Move o que já está tocando E vigia novos streams do app (via
+        `pactl subscribe`), então você pode iniciar a captura ANTES de dar play —
+        quando o app começar a tocar, o stream é movido automaticamente.
+        `app_match`: substring case-insensitive do nome/binário do app.
+        Retorna (monitor_para_capturar, sink_real_para_a_saida). NÃO mexe no sink
+        padrão — guitarra e demais apps seguem intactos.
         """
+        self._needle = app_match.lower()
         self._cleanup_existing()                 # remove sinks bandfoss sobrando
         self.real_sink = self._pick_real_sink()  # alto-falante real (não o virtual)
         self.module_id = _run([
@@ -135,30 +173,35 @@ class PipeWireRouter:
             f"sink_name={self.sink_name}",
             "sink_properties=device.description=BandFOSS_Capture",
         ])
-
-        needle = app_match.lower()
-        moved = 0
-        for a in list_playback_apps():
-            hay = f"{a['app']} {a['binary']} {a['media']}".lower()
-            if needle in hay:
-                r = subprocess.run(
-                    [self._pactl, "move-sink-input", a["id"], self.sink_name],
-                    check=False,
-                )
-                if r.returncode == 0:
-                    self._moved_ids.append(a["id"])
-                    moved += 1
-        if moved == 0:
-            # nada casou -> desfaz para não deixar um sink virtual órfão
-            self.teardown()
-            raise RuntimeError(
-                f"Nenhum stream de '{app_match}' tocando agora. "
-                "Comece a tocar a música no app e tente de novo."
-            )
+        self._move_matching()                    # move o que já está tocando (se houver)
+        self._start_watcher()                    # vigia novos streams do app
         return f"{self.sink_name}.monitor", self.real_sink
 
+    def _start_watcher(self) -> None:
+        self._watch_proc = subprocess.Popen(
+            [self._pactl, "subscribe"],
+            stdout=subprocess.PIPE, stderr=subprocess.DEVNULL, text=True,
+        )
+        self._watch_thread = threading.Thread(target=self._watch_loop, daemon=True)
+        self._watch_thread.start()
+
+    def _watch_loop(self) -> None:
+        """A cada evento de sink-input novo/alterado, tenta mover o app escolhido."""
+        try:
+            for line in self._watch_proc.stdout:
+                if "sink-input" in line and ("'new'" in line or "'change'" in line):
+                    try:
+                        self._move_matching()
+                    except Exception:  # noqa: BLE001 — captura pode estar encerrando
+                        pass
+        except Exception:  # noqa: BLE001
+            pass
+
     def teardown(self) -> None:
-        """Devolve os streams ao sink real e remove o sink virtual."""
+        """Para o vigia, devolve os streams ao sink real e remove o sink virtual."""
+        if self._watch_proc is not None:
+            self._watch_proc.terminate()
+            self._watch_proc = None
         if self.real_sink:
             for sid in self._inputs_on_virtual():
                 subprocess.run(
