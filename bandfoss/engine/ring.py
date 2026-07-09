@@ -1,22 +1,21 @@
-"""Ring buffer float32 [frames, canais], thread-safe, para áudio em streaming."""
+"""Thread-safe float32 [frames, channels] ring buffer for streaming audio."""
 
 from __future__ import annotations
 
 import threading
-from typing import Tuple
 
 import numpy as np
 
 
 class FloatRing:
-    """Buffer circular produtor/consumidor. Overflow descarta o mais antigo."""
+    """Producer/consumer circular buffer. On overflow the oldest data is dropped."""
 
     def __init__(self, capacity_frames: int, channels: int = 2):
         self._cap = int(capacity_frames)
         self._ch = channels
         self._buf = np.zeros((self._cap, channels), dtype=np.float32)
-        self._w = 0          # próxima posição de escrita
-        self._count = 0      # frames válidos disponíveis
+        self._w = 0          # next write position
+        self._count = 0      # valid frames available
         self._cond = threading.Condition()
         self._closed = False
 
@@ -26,25 +25,25 @@ class FloatRing:
         if n == 0:
             return
         with self._cond:
-            if n >= self._cap:                       # mantém só o final
+            if n >= self._cap:                       # keep only the tail
                 data = data[-self._cap:]
                 n = self._cap
             end = self._w + n
             if end <= self._cap:
                 self._buf[self._w:end] = data
-            else:                                    # dá a volta
+            else:                                    # wrap around
                 k = self._cap - self._w
                 self._buf[self._w:] = data[:k]
                 self._buf[: end - self._cap] = data[k:]
             self._w = end % self._cap
-            # se estourou a capacidade, o read pointer avança implicitamente
+            # on overflow the read pointer advances implicitly
             self._count = min(self._cap, self._count + n)
             self._cond.notify_all()
 
-    def read(self, n: int, block: bool = False) -> Tuple[np.ndarray, int]:
-        """Retorna (array de tamanho `n` com zero-fill, nº de frames válidos).
+    def read(self, n: int, block: bool = False) -> tuple[np.ndarray, int]:
+        """Return (array of length `n`, zero-filled; number of valid frames).
 
-        block=True espera até haver `n` frames ou o ring ser fechado.
+        block=True waits until `n` frames are available or the ring is closed.
         """
         out = np.zeros((n, self._ch), dtype=np.float32)
         with self._cond:

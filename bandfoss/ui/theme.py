@@ -1,20 +1,20 @@
-"""Tema visual "Tube Amp" — carvão quente + brilho âmbar, cara de gear de áudio."""
+"""Visual "Tube Amp" theme — warm charcoal + amber glow, audio-gear look."""
 
 from __future__ import annotations
 
-# Paleta -----------------------------------------------------------------------
-BG = "#1A1614"          # carvão quente (fundo)
-PANEL = "#241E1A"       # painéis / campos
-PANEL_HI = "#2E2620"    # botão secundário / hover sutil
-BORDER = "#3A302A"      # bordas quentes
-TEXT = "#EDE6DA"        # creme
-MUTED = "#9A8C7E"       # texto secundário (cinza quente)
-AMBER = "#FF7A18"       # acento principal (brilho de válvula)
+# Palette ----------------------------------------------------------------------
+BG = "#1A1614"          # warm charcoal (background)
+PANEL = "#241E1A"       # panels / fields
+PANEL_HI = "#2E2620"    # secondary button / subtle hover
+BORDER = "#3A302A"      # warm borders
+TEXT = "#EDE6DA"        # cream
+MUTED = "#9A8C7E"       # secondary text (warm gray)
+AMBER = "#FF7A18"       # primary accent (tube glow)
 AMBER_HI = "#FF8C34"    # hover
-AMBER_LO = "#4A3B2E"    # âmbar apagado (desabilitado)
-REC = "#E5484D"         # vermelho de "REC" (capturar ao vivo)
+AMBER_LO = "#4A3B2E"    # dimmed amber (disabled)
+REC = "#E5484D"         # "REC" red (live capture)
 REC_HI = "#F05860"
-GROOVE = "#141010"      # trilho do fader (mais escuro)
+GROOVE = "#141010"      # fader track (darker)
 
 STYLESHEET = f"""
 QWidget {{
@@ -56,7 +56,7 @@ QPushButton:hover {{ border-color: {AMBER}; }}
 QPushButton:pressed {{ background: {PANEL}; }}
 QPushButton:disabled {{ color: #6B5F54; border-color: #2A231E; }}
 
-/* ação primária (Separar) — âmbar cheio */
+/* primary action (Separate) — full amber */
 QPushButton#primaryBtn {{
     background: {AMBER}; color: {BG}; border: none; font-weight: 800;
     padding: 7px 18px;
@@ -64,7 +64,7 @@ QPushButton#primaryBtn {{
 QPushButton#primaryBtn:hover {{ background: {AMBER_HI}; }}
 QPushButton#primaryBtn:disabled {{ background: {AMBER_LO}; color: #8A7A6C; }}
 
-/* ação de gravação (Capturar ao vivo) — vermelho REC */
+/* record action (Capture live) — REC red */
 QPushButton#recordBtn {{
     background: {REC}; color: #1A1614; border: none; font-weight: 800;
     padding: 7px 18px;
@@ -73,14 +73,14 @@ QPushButton#recordBtn:hover {{ background: {REC_HI}; }}
 QPushButton#recordBtn:checked {{ background: #8F3538; color: {TEXT}; }}
 QPushButton#recordBtn:disabled {{ background: #4A2A2B; color: #8A7A6C; }}
 
-/* expander "Avançado" — discreto */
+/* "Advanced" expander — discreet */
 QPushButton#advBtn {{
     background: transparent; border: none; color: {MUTED};
     text-align: left; font-weight: 700; padding: 4px 2px;
 }}
 QPushButton#advBtn:hover {{ color: {AMBER}; border: none; }}
 
-/* botões M/S das faixas */
+/* per-strip M/S buttons */
 QPushButton#muteBtn:checked {{
     background: {REC}; color: {BG}; border-color: {REC}; font-weight: 800;
 }}
@@ -103,7 +103,7 @@ QToolTip {{
     background: {PANEL}; color: {TEXT}; border: 1px solid {AMBER}; padding: 4px;
 }}
 
-/* faders verticais (base; a cor do canal é aplicada por-strip) */
+/* vertical faders (base; the channel color is applied per-strip) */
 QSlider::groove:vertical {{
     width: 6px; background: {GROOVE}; border-radius: 3px;
 }}
@@ -121,7 +121,7 @@ QSlider::handle:horizontal {{
 
 
 def fader_style(color: str) -> str:
-    """Stylesheet por-strip: enche o trecho ABAIXO do cursor (nível, de baixo p/ cima)."""
+    """Per-strip stylesheet: fills the section BELOW the handle (level, bottom-up)."""
     return f"""
     QSlider::groove:vertical {{ width: 6px; background: {GROOVE}; border-radius: 3px; }}
     QSlider::add-page:vertical {{ background: {color}; border-radius: 3px; }}

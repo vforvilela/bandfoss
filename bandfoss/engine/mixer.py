@@ -1,13 +1,15 @@
-"""Mixer em tempo real: toca N stems somados por ganho, com mute/solo/seek.
+"""Real-time mixer: plays N gain-summed stems, with mute/solo/seek.
 
-Os stems são pré-separados (arrays em memória). O callback do sounddevice mixa
-por bloco, lendo os ganhos atuais — mexer num fader reflete imediatamente no som.
+Stems are pre-separated (in-memory arrays). The sounddevice callback mixes
+per block, reading the current gains — so moving a fader is heard immediately.
+
+Note: this is the offline path, used by scripts/smoke_test.py. The shipped app
+runs live only (see live_engine.LiveEngine).
 """
 
 from __future__ import annotations
 
 import threading
-from typing import Dict, List, Optional
 
 import numpy as np
 import sounddevice as sd
@@ -17,12 +19,12 @@ from .gains import StemGains
 
 
 class StemMixer:
-    def __init__(self, stems: Dict[str, np.ndarray], samplerate: int = SAMPLE_RATE):
+    def __init__(self, stems: dict[str, np.ndarray], samplerate: int = SAMPLE_RATE):
         if not stems:
-            raise ValueError("Nenhum stem fornecido ao mixer.")
+            raise ValueError("No stems provided to the mixer.")
 
-        self.names: List[str] = list(stems.keys())
-        # Empilha stems em um array [n_stems, amostras, 2] para mix vetorizada.
+        self.names: list[str] = list(stems.keys())
+        # Stack stems into a [n_stems, samples, 2] array for a vectorized mix.
         length = max(s.shape[0] for s in stems.values())
         self._buffers = np.zeros((len(self.names), length, CHANNELS), dtype=np.float32)
         for i, name in enumerate(self.names):
@@ -37,19 +39,19 @@ class StemMixer:
         self._pos = 0
         self._playing = False
         self._lock = threading.Lock()
-        self._stream: Optional[sd.OutputStream] = None
+        self._stream: sd.OutputStream | None = None
 
-    # ---- controle de stems (delegado ao StemGains) ------------------------
+    # ---- stem control (delegated to StemGains) ----------------------------
     def set_gain(self, name: str, gain: float) -> None:
         self.gains.set_gain(name, gain)
 
     def set_muted(self, name: str, muted: bool) -> None:
         self.gains.set_muted(name, muted)
 
-    def set_solo(self, name: Optional[str]) -> None:
+    def set_solo(self, name: str | None) -> None:
         self.gains.set_solo(name)
 
-    # ---- transporte -------------------------------------------------------
+    # ---- transport --------------------------------------------------------
     def _callback(self, outdata, frames, time_info, status):  # noqa: ANN001
         with self._lock:
             if not self._playing:
@@ -63,7 +65,7 @@ class StemMixer:
 
         outdata.fill(0)
         if n > 0:
-            # [n_stems, n, 2] -> soma ponderada sobre stems -> [n, 2]
+            # [n_stems, n, 2] -> weighted sum over stems -> [n, 2]
             mix = self.gains.mix(self._buffers[:, start:end, :])
             np.clip(mix, -1.0, 1.0, out=mix)
             outdata[:n] = mix
@@ -73,7 +75,7 @@ class StemMixer:
                 self._playing = False
 
     def start(self) -> None:
-        """Abre o stream de saída (idempotente)."""
+        """Open the output stream (idempotent)."""
         if self._stream is None:
             self._stream = sd.OutputStream(
                 samplerate=self.samplerate,
@@ -116,7 +118,7 @@ class StemMixer:
     def seek_seconds(self, seconds: float) -> None:
         self.seek(int(seconds * self.samplerate))
 
-    # ---- estado -----------------------------------------------------------
+    # ---- state ------------------------------------------------------------
     @property
     def is_playing(self) -> bool:
         with self._lock:

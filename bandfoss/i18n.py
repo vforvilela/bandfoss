@@ -1,7 +1,7 @@
-"""i18n mínimo, baseado em dicionário. Inglês por padrão; PT-BR disponível.
+"""Minimal dictionary-based i18n. English by default; PT-BR available.
 
-Troque o idioma com a variável de ambiente BANDFOSS_LANG=pt (ou en), ou chame
-`set_language("pt")` em runtime antes de construir a janela.
+Switch language with the BANDFOSS_LANG=pt (or en) environment variable, or call
+`set_language("pt")` at runtime before building the window.
 """
 
 from __future__ import annotations
@@ -12,10 +12,10 @@ DEFAULT_LANG = "en"
 
 _STRINGS = {
     "en": {
-        # janela / cabeçalho
+        # window / header
         "window_title": "BandFOSS — Live Stem Mixer",
         "subtitle": "STEM MIXER",
-        # captura ao vivo
+        # live capture
         "app_label": "Source:",
         "app_placeholder": "e.g. Chrome, Spotify…",
         "capture_start": "● Capture live",
@@ -29,7 +29,7 @@ _STRINGS = {
         "src_monitor": "monitor",
         "err_capture_title": "Live capture failed",
         "err_no_app": "Type the source app to capture (e.g. Chrome).",
-        # avançado
+        # advanced
         "advanced": "ADVANCED",
         "model_label": "Model:",
         "latency_label": "Latency:",
@@ -53,10 +53,10 @@ _STRINGS = {
         # stems
         "stem_vocals": "Vocals", "stem_drums": "Drums", "stem_bass": "Bass",
         "stem_other": "Other", "stem_guitar": "Guitar", "stem_piano": "Piano",
-        # modelos
+        # models
         "model_fast4": "Fast · 4 stems",
         "model_guitar6": "Guitar · 6 stems",
-        # latências
+        # latencies
         "latency_low": "Low · ~1s",
         "latency_medium": "Medium · ~2s",
         "latency_high": "High · ~3s",
@@ -123,7 +123,7 @@ def current_language() -> str:
 
 
 def t(key: str, **kwargs) -> str:
-    """Traduz `key` no idioma atual (fallback: inglês, depois a própria chave)."""
+    """Translate `key` into the current language (fallback: English, then the key)."""
     s = _STRINGS.get(_lang, {}).get(key)
     if s is None:
         s = _STRINGS[DEFAULT_LANG].get(key, key)

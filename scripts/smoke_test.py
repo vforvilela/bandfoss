@@ -1,36 +1,37 @@
-"""Teste headless do pipeline: captura -> separação -> (opcional) mixagem.
+"""Headless pipeline test: load -> separate -> (optional) mix.
 
-Uso:
-    python scripts/smoke_test.py <arquivo-ou-url> [--model htdemucs_ft] [--play]
+Usage:
+    python scripts/smoke_test.py <file-or-url> [--model htdemucs_ft] [--play]
 
-Sem --play, apenas separa e imprime a energia (RMS) de cada stem — útil para
-validar o pipeline sem placa de som / servidor gráfico.
+Without --play, it only separates and prints each stem's energy (RMS) — handy
+to validate the pipeline with no sound card / display server.
 """
 
 from __future__ import annotations
 
-import argparse
 import sys
 
 import numpy as np
 
 
 def main() -> int:
+    import argparse
+
     ap = argparse.ArgumentParser()
-    ap.add_argument("source", help="arquivo local ou URL")
+    ap.add_argument("source", help="local file or URL")
     ap.add_argument("--model", default="htdemucs_ft")
-    ap.add_argument("--play", action="store_true", help="tocar 5s do mix após separar")
+    ap.add_argument("--play", action="store_true", help="play 5s of the mix after separating")
     args = ap.parse_args()
 
     from bandfoss.capture.file_source import load_source
     from bandfoss.engine.separator import Separator
 
-    print(f"[1/2] Carregando fonte: {args.source}")
+    print(f"[1/2] Loading source: {args.source}")
     pcm = load_source(args.source)
-    print(f"      PCM: {pcm.shape[0]} amostras, {pcm.shape[1]} canais "
+    print(f"      PCM: {pcm.shape[0]} samples, {pcm.shape[1]} channels "
           f"({pcm.shape[0] / 44100:.1f}s)")
 
-    print(f"[2/2] Separando com '{args.model}' …")
+    print(f"[2/2] Separating with '{args.model}' …")
     sep = Separator(args.model)
     print(f"      device = {sep.device}; stems = {sep.sources}")
     stems = sep.separate(pcm, progress=lambda p: print(f"      {p * 100:4.0f}%", end="\r"))
@@ -41,12 +42,13 @@ def main() -> int:
         print(f"      {name:8s}  RMS={rms:.4f}  shape={arr.shape}")
 
     if args.play:
-        from bandfoss.engine.mixer import StemMixer
         import time
+
+        from bandfoss.engine.mixer import StemMixer
 
         mixer = StemMixer(stems, samplerate=sep.samplerate)
         mixer.play()
-        print("      tocando 5s…")
+        print("      playing 5s…")
         time.sleep(5)
         mixer.close()
 

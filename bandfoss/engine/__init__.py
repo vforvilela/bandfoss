@@ -1,1 +1,1 @@
-"""Motor: separação (Demucs) e mixagem/playback em tempo real."""
+"""Engine: separation (Demucs) and real-time mixing/playback."""

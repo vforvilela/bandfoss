@@ -1,20 +1,21 @@
-"""Separação AO VIVO: janela deslizante + Demucs + overlap-add em tempo real.
+"""LIVE separation: sliding window + Demucs + real-time overlap-add.
 
-Puxa áudio da captura em janelas de W frames com hop = W/2 (overlap de 50%),
-separa cada janela, remixa pelos ganhos atuais, aplica janela de Hann e faz
-overlap-add — reconstrução suave (COLA) que também suaviza os artefatos de borda
-do Demucs. A saída vai para um FloatRing consumido pelo sounddevice.
+Pulls audio from the capture in windows of W frames with hop = W/2 (50% overlap),
+separates each window, remixes by the current gains, applies a Hann window and
+overlap-adds — a smooth reconstruction (COLA) that also softens Demucs' edge
+artifacts. The output goes to a FloatRing consumed by sounddevice.
 
-Latência inerente ≈ tamanho da janela (precisamos de uma janela cheia antes da
-primeira separação). Não há como zerar isso com o Demucs.
+Inherent latency ~= window size (we need a full window before the first
+separation). This cannot be driven to zero with Demucs.
 """
 
 from __future__ import annotations
 
+import logging
 import shutil
 import subprocess
 import threading
-from typing import List, Optional, Protocol
+from typing import Protocol
 
 import numpy as np
 import sounddevice as sd
@@ -23,13 +24,15 @@ from ..config import BLOCK_SIZE, CHANNELS, LIVE_SHIFTS, SAMPLE_RATE
 from .gains import StemGains
 from .ring import FloatRing
 
+log = logging.getLogger(__name__)
+
 
 class _CaptureLike(Protocol):
-    def read_exact(self, n: int) -> Optional[np.ndarray]: ...
+    def read_exact(self, n: int) -> np.ndarray | None: ...
 
 
 class _SeparatorLike(Protocol):
-    sources: List[str]
+    sources: list[str]
     def separate(self, pcm: np.ndarray, fast: bool = ...) -> dict: ...
 
 
@@ -40,11 +43,11 @@ class LiveEngine:
         capture: _CaptureLike,
         window_frames: int,
         samplerate: int = SAMPLE_RATE,
-        gains: Optional[StemGains] = None,
+        gains: StemGains | None = None,
         start_output: bool = True,
-        output_sink: Optional[str] = None,
+        output_sink: str | None = None,
     ):
-        # Garante W par e hop = W/2 (necessário para overlap-add Hann perfeito).
+        # Force W even and hop = W/2 (required for perfect Hann overlap-add).
         self.W = int(window_frames) - (int(window_frames) % 2)
         self.H = self.W // 2
         self.names = list(separator.sources)
@@ -54,44 +57,44 @@ class LiveEngine:
         self._sep = separator
         self._cap = capture
         self._start_output = start_output
-        self._output_sink = output_sink   # se definido, toca via pacat neste sink real
-        self._pacat: Optional[subprocess.Popen] = None
-        self._pump_thread: Optional[threading.Thread] = None
+        self._output_sink = output_sink   # if set, play via pacat to this real sink
+        self._pacat: subprocess.Popen | None = None
+        self._pump_thread: threading.Thread | None = None
 
         self._nstems = len(self.names)
 
-        # Hann PERIÓDICO (não o np.hanning): garante overlap-add constante
-        # (COLA = 1) no hop de 50%, sem ripple de amplitude entre janelas.
+        # PERIODIC Hann (not np.hanning): guarantees constant overlap-add
+        # (COLA = 1) at 50% hop, with no amplitude ripple between windows.
         w = 0.5 - 0.5 * np.cos(2 * np.pi * np.arange(self.W) / self.W)
         self._hann = w.astype(np.float32)[None, :, None]        # [1, W, 1]
         self._carry = np.zeros((self._nstems, self.H, CHANNELS), dtype=np.float32)
         self._window = np.zeros((self.W, CHANNELS), dtype=np.float32)
 
-        # O ring guarda os stems SEPARADOS (overlap-added), não o mix. O ganho é
-        # aplicado só na saída (a cada bloco) -> faders/mute respondem na hora.
+        # The ring holds the SEPARATED (overlap-added) stems, not the mix. Gain
+        # is applied only at output (per block) -> faders/mute respond instantly.
         self.out_ring = FloatRing(int(4 * samplerate), self._nstems * CHANNELS)
         self._stop = threading.Event()
-        self._thread: Optional[threading.Thread] = None
-        self._stream: Optional[sd.OutputStream] = None
+        self._thread: threading.Thread | None = None
+        self._stream: sd.OutputStream | None = None
         self.underruns = 0
 
-    # ---- delegação de ganhos (mesma API do StemMixer) ---------------------
+    # ---- gain delegation (same API as StemMixer) --------------------------
     def set_gain(self, name: str, gain: float) -> None:
         self.gains.set_gain(name, gain)
 
     def set_muted(self, name: str, muted: bool) -> None:
         self.gains.set_muted(name, muted)
 
-    def set_solo(self, name: Optional[str]) -> None:
+    def set_solo(self, name: str | None) -> None:
         self.gains.set_solo(name)
 
     @property
     def latency_seconds(self) -> float:
         return self.W / self.samplerate
 
-    # ---- núcleo DSP -------------------------------------------------------
+    # ---- DSP core ---------------------------------------------------------
     def prime(self) -> bool:
-        """Enche a primeira janela. Retorna False se a captura acabar antes."""
+        """Fill the first window. Returns False if the capture ends first."""
         first = self._cap.read_exact(self.W)
         if first is None:
             return False
@@ -99,11 +102,11 @@ class LiveEngine:
         self._carry = np.zeros((self._nstems, self.H, CHANNELS), dtype=np.float32)
         return True
 
-    def step(self) -> Optional[np.ndarray]:
-        """Separa a janela, emite H frames por stem (empacotados) e desliza.
+    def step(self) -> np.ndarray | None:
+        """Separate the window, emit H frames per stem (packed), and slide.
 
-        NÃO aplica ganho aqui — o mix por fader é feito na saída, por bloco.
-        Retorna [H, n_stems*2] ou None no fim.
+        Does NOT apply gain here — the fader mix happens at output, per block.
+        Returns [H, n_stems*2] or None at the end.
         """
         stems = self._sep.separate(self._window, fast=True, shifts=LIVE_SHIFTS)
         stacked = np.stack([stems[n] for n in self.names])   # [S, W, 2]
@@ -116,7 +119,7 @@ class LiveEngine:
         if nxt is None:
             return None
         self._window = np.concatenate([self._window[self.H:], nxt], axis=0)
-        # empacota [S, H, 2] -> [H, S*2] para o ring
+        # pack [S, H, 2] -> [H, S*2] for the ring
         return np.transpose(out, (1, 0, 2)).reshape(self.H, self._nstems * CHANNELS)
 
     def _loop(self) -> None:
@@ -128,17 +131,17 @@ class LiveEngine:
                 if out is None:
                     break
                 self.out_ring.write(out)
-        except Exception as exc:  # noqa: BLE001
-            print(f"[LiveEngine] erro no processamento: {exc}")
+        except Exception:  # noqa: BLE001
+            log.exception("processing error")
         finally:
             self.out_ring.close()
 
-    # ---- saída de áudio ---------------------------------------------------
+    # ---- audio output -----------------------------------------------------
     def _mix_block(self, packed: np.ndarray) -> np.ndarray:
-        """[n, n_stems*2] -> [n, 2] aplicando os ganhos ATUAIS (mute/solo)."""
+        """[n, n_stems*2] -> [n, 2] applying the CURRENT gains (mute/solo)."""
         n = packed.shape[0]
         frames = packed.reshape(n, self._nstems, CHANNELS)   # [n, S, 2]
-        g = self.gains.vector()                              # [S] (efetivo)
+        g = self.gains.vector()                              # [S] (effective)
         mix = np.tensordot(frames, g, axes=(1, 0)).astype(np.float32)  # [n, 2]
         np.clip(mix, -1.0, 1.0, out=mix)
         return mix
@@ -150,11 +153,11 @@ class LiveEngine:
         outdata[:] = self._mix_block(chunk)
 
     def _pump_to_pacat(self) -> None:
-        """Lê o out_ring, mixa com os ganhos atuais e escreve no pacat."""
+        """Read out_ring, mix with the current gains, and write to pacat."""
         try:
             while not self._stop.is_set():
                 chunk, avail = self.out_ring.read(BLOCK_SIZE, block=True)
-                if avail == 0:            # ring fechado e vazio -> fim
+                if avail == 0:            # ring closed and empty -> end
                     break
                 try:
                     self._pacat.stdin.write(self._mix_block(chunk).tobytes())
@@ -172,11 +175,11 @@ class LiveEngine:
         self._thread.start()
 
         if self._output_sink:
-            # saída explícita no sink REAL via pacat (não segue o default,
-            # que agora é o sink virtual) -> sem realimentação.
+            # explicit output to the REAL sink via pacat (does not follow the
+            # default, which is now the virtual sink) -> no feedback loop.
             pacat = shutil.which("pacat")
             if pacat is None:
-                raise RuntimeError("'pacat' não encontrado no PATH.")
+                raise RuntimeError("'pacat' not found on PATH.")
             self._pacat = subprocess.Popen(
                 [
                     pacat, "--playback",
@@ -191,7 +194,7 @@ class LiveEngine:
             self._pump_thread = threading.Thread(target=self._pump_to_pacat, daemon=True)
             self._pump_thread.start()
         elif self._start_output:
-            # fallback (modo avançado, sem isolamento): sounddevice no default
+            # fallback (advanced mode, no isolation): sounddevice on the default
             self._stream = sd.OutputStream(
                 samplerate=self.samplerate,
                 channels=CHANNELS,

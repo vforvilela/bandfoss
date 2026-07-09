@@ -1,35 +1,32 @@
-"""Configuração central do BandFOSS."""
+"""Central configuration for BandFOSS."""
 
 from __future__ import annotations
 
-# Áudio ----------------------------------------------------------------------
-SAMPLE_RATE = 44100          # Demucs opera nativamente em 44.1 kHz
-CHANNELS = 2                 # estéreo
-BLOCK_SIZE = 1024            # frames por callback do sounddevice (~23 ms)
+# Audio ----------------------------------------------------------------------
+SAMPLE_RATE = 44100          # Demucs operates natively at 44.1 kHz
+CHANNELS = 2                 # stereo
+BLOCK_SIZE = 1024            # frames per sounddevice callback (~23 ms)
 
-# Modelos Demucs -------------------------------------------------------------
-# htdemucs_ft -> 4 stems (drums, bass, other, vocals)  [melhor qualidade 4-stem]
-# htdemucs_6s -> 6 stems (+ guitar, piano)             [espelha o JBL BandBox]
-MODEL_4STEM = "htdemucs_ft"
-MODEL_6STEM = "htdemucs_6s"
-DEFAULT_MODEL = MODEL_4STEM
+# Demucs models --------------------------------------------------------------
+# htdemucs_ft -> 4 stems (drums, bass, other, vocals) [best 4-stem quality];
+# used by the offline helper (scripts/smoke_test.py).
+DEFAULT_MODEL = "htdemucs_ft"
 
-# Modelos disponíveis na captura AO VIVO (id -> nome do modelo Demucs).
-# O rótulo exibido vem do i18n (model_<id>). "fast4" = 4 stems; "guitar6" = 6 stems.
+# Models available in LIVE capture (id -> Demucs model name). The displayed
+# label comes from i18n (model_<id>). "fast4" = 4 stems; "guitar6" = 6 stems.
 LIVE_MODELS = {
     "fast4": "htdemucs",
     "guitar6": "htdemucs_6s",
 }
-LIVE_MODEL = "htdemucs"          # padrão
 
-# Janela deslizante da separação ao vivo.
-# Latência ≈ LIVE_WINDOW_SEC (NÃO é o tempo de processamento; é o algoritmo:
-# a janela precisa encher antes da 1ª separação). Overlap de 50% (hop = janela/2)
-# dá overlap-add perfeito com Hann. Janela menor = menos latência, menos qualidade.
-LIVE_WINDOW_SEC = 2.0            # padrão (id "medium")
-LIVE_HOP_SEC = 1.0
+# Sliding window for live separation.
+# Latency ~= LIVE_WINDOW_SEC (NOT the processing time; it is inherent to the
+# algorithm: the window must fill before the first separation). 50% overlap
+# (hop = window/2) gives perfect overlap-add with a Hann window. Smaller window
+# = less latency, lower quality.
+LIVE_WINDOW_SEC = 2.0            # default (id "medium")
 
-# Opções de latência ao vivo (id -> janela em segundos). Rótulo vem do i18n.
+# Live latency options (id -> window in seconds). Label comes from i18n.
 LIVE_WINDOWS = {
     "low": 1.0,
     "medium": 2.0,
@@ -37,28 +34,27 @@ LIVE_WINDOWS = {
     "max": 6.0,
 }
 
-# "shifts" do Demucs no modo ao vivo: passadas com deslocamento aleatório, cuja
-# média reduz artefatos. Mais = melhor e mais lento. A RTX 4080 aguenta com folga.
+# Demucs "shifts" in live mode: random-offset passes whose average reduces
+# artifacts. More = better and slower; a modern GPU handles it comfortably.
 LIVE_SHIFTS = 2
 
-# Ordem de exibição dos faders na UI: voz primeiro, "outros" por último.
+# Fader display order in the UI: vocals first, "other" last.
 STEM_ORDER = ["vocals", "drums", "bass", "guitar", "piano", "other"]
 
 
-def order_stems(names):
-    """Reordena os stems para exibição: voz primeiro, 'outros' por último."""
+def order_stems(names: list[str]) -> list[str]:
+    """Reorder stems for display: vocals first, 'other' last."""
     known = [s for s in STEM_ORDER if s in names]
     rest = [s for s in names if s not in STEM_ORDER]
     return known + rest
 
 
-# Cor de cada canal (code de cor tipo mixer). Hues distintos, legíveis no escuro.
+# Per-channel color (mixer-style color code). Distinct hues, legible on dark.
 STEM_COLORS = {
-    "vocals": "#4CC2C4",   # teal — voz
-    "drums": "#E5484D",    # vermelho — bateria
-    "bass": "#7C5CFF",     # violeta — baixo
-    "other": "#F2A93B",    # âmbar — outros
-    "guitar": "#6FCF57",   # verde — guitarra
-    "piano": "#C77DFF",    # lilás — piano
+    "vocals": "#4CC2C4",   # teal — vocals
+    "drums": "#E5484D",    # red — drums
+    "bass": "#7C5CFF",     # violet — bass
+    "other": "#F2A93B",    # amber — other
+    "guitar": "#6FCF57",   # green — guitar
+    "piano": "#C77DFF",    # lilac — piano
 }
-

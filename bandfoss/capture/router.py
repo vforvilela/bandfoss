@@ -1,40 +1,33 @@
-"""Roteamento seletivo no PipeWire para captura ao vivo por aplicativo.
+"""Selective PipeWire routing for per-application live capture.
 
-Cria um *sink virtual* (null sink) e move para ele **apenas o app escolhido**
-(ex.: Chrome). O BandFOSS captura o monitor desse sink e toca o resultado
-processado no alto-falante real. Todo o resto — inclusive uma guitarra ao vivo —
-continua tocando normalmente nos alto-falantes, sem captura nem processamento.
+Creates a *virtual sink* (null sink) and moves **only the chosen app** to it
+(e.g. Chrome). BandFOSS captures that sink's monitor and plays the processed
+result back on the real speaker. Everything else — including a live guitar —
+keeps playing normally through the speakers, uncaptured and unprocessed.
 
-  Chrome ─► [sink virtual] ─► monitor ─► BandFOSS ─► pacat ─► [sink real] ─► 🔊
-  Guitarra ──────────────────────────────────────────────► [sink real] ─► 🔊
+  Chrome ─► [virtual sink] ─► monitor ─► BandFOSS ─► pacat ─► [real sink] ─► 🔊
+  Guitar ──────────────────────────────────────────────────► [real sink] ─► 🔊
 """
 
 from __future__ import annotations
 
 import re
-import shutil
 import subprocess
 import threading
-from typing import Dict, List, Optional, Tuple
+
+from ..util import require_tool
 
 
-def _require(tool: str) -> str:
-    path = shutil.which(tool)
-    if path is None:
-        raise RuntimeError(f"'{tool}' não encontrado no PATH.")
-    return path
-
-
-def _run(args: List[str]) -> str:
+def _run(args: list[str]) -> str:
     return subprocess.check_output(args, text=True).strip()
 
 
-def list_playback_apps() -> List[Dict[str, str]]:
-    """Lista os streams tocando agora: {id, app, binary, media, label}."""
-    pactl = _require("pactl")
+def list_playback_apps() -> list[dict[str, str]]:
+    """List streams playing right now: {id, app, binary, media, label}."""
+    pactl = require_tool("pactl")
     out = subprocess.check_output([pactl, "list", "sink-inputs"], text=True)
-    apps: List[Dict[str, str]] = []
-    cur: Optional[Dict[str, str]] = None
+    apps: list[dict[str, str]] = []
+    cur: dict[str, str] | None = None
     for line in out.splitlines():
         if line.startswith("Sink Input #"):
             if cur:
@@ -55,22 +48,21 @@ def list_playback_apps() -> List[Dict[str, str]]:
 
 
 class PipeWireRouter:
-    """Move o app escolhido para um sink virtual; devolve tudo no teardown."""
+    """Move the chosen app to a virtual sink; put everything back on teardown."""
 
     def __init__(self, sink_name: str = "bandfoss_capture"):
         self.sink_name = sink_name
-        self._pactl = _require("pactl")
-        self.module_id: Optional[str] = None
-        self.real_sink: Optional[str] = None
-        self._moved_ids: List[str] = []
+        self._pactl = require_tool("pactl")
+        self.module_id: str | None = None
+        self.real_sink: str | None = None
         self._needle: str = ""
-        self._watch_proc: Optional[subprocess.Popen] = None
-        self._watch_thread: Optional[threading.Thread] = None
+        self._watch_proc: subprocess.Popen | None = None
+        self._watch_thread: threading.Thread | None = None
 
-    def _modules_for_our_sink(self) -> List[str]:
-        """IDs de módulos null-sink já criados com o nosso sink_name (sobras)."""
+    def _modules_for_our_sink(self) -> list[str]:
+        """IDs of null-sink modules already created with our sink_name (leftovers)."""
         out = subprocess.check_output([self._pactl, "list", "modules"], text=True)
-        ids: List[str] = []
+        ids: list[str] = []
         cur = name = arg = None
         for line in out.splitlines():
             m = re.match(r"Module #(\d+)", line)
@@ -93,7 +85,7 @@ class PipeWireRouter:
             subprocess.run([self._pactl, "unload-module", mid], check=False)
 
     def _pick_real_sink(self) -> str:
-        """Sink de saída real (hardware), ignorando o virtual e monitores."""
+        """Real (hardware) output sink, ignoring the virtual sink and monitors."""
         default = _run([self._pactl, "get-default-sink"])
         if default and default != self.sink_name and not default.endswith(".monitor"):
             return default
@@ -102,9 +94,9 @@ class PipeWireRouter:
             parts = line.split("\t")
             if len(parts) >= 2 and parts[1].startswith("alsa_output."):
                 return parts[1]
-        raise RuntimeError("Nenhum sink de saída de hardware encontrado.")
+        raise RuntimeError("No hardware output sink found.")
 
-    def _virtual_sink_index(self) -> Optional[str]:
+    def _virtual_sink_index(self) -> str | None:
         out = subprocess.check_output([self._pactl, "list", "sinks", "short"], text=True)
         for line in out.splitlines():
             parts = line.split("\t")
@@ -112,7 +104,7 @@ class PipeWireRouter:
                 return parts[0]
         return None
 
-    def _inputs_on_virtual(self) -> List[str]:
+    def _inputs_on_virtual(self) -> list[str]:
         idx = self._virtual_sink_index()
         if idx is None:
             return []
@@ -120,13 +112,13 @@ class PipeWireRouter:
             [self._pactl, "list", "sink-inputs", "short"], text=True
         )
         return [
-            l.split("\t")[0]
-            for l in out.splitlines()
-            if "\t" in l and l.split("\t")[1] == str(idx)
+            line.split("\t")[0]
+            for line in out.splitlines()
+            if "\t" in line and line.split("\t")[1] == str(idx)
         ]
 
-    def _input_sink_map(self) -> Dict[str, str]:
-        """{id_do_stream: índice_do_sink} para todos os sink-inputs."""
+    def _input_sink_map(self) -> dict[str, str]:
+        """{stream_id: sink_index} for every sink-input."""
         out = subprocess.check_output(
             [self._pactl, "list", "sink-inputs", "short"], text=True
         )
@@ -138,7 +130,7 @@ class PipeWireRouter:
         return m
 
     def _move_matching(self) -> int:
-        """Move para o sink virtual os streams do app que ainda não estão nele."""
+        """Move the app's streams that are not yet on the virtual sink."""
         vidx = self._virtual_sink_index()
         if vidx is None:
             return 0
@@ -155,26 +147,26 @@ class PipeWireRouter:
                     moved += 1
         return moved
 
-    def setup(self, app_match: str) -> Tuple[str, str]:
-        """Cria o sink virtual e passa a capturar SÓ o app `app_match`.
+    def setup(self, app_match: str) -> tuple[str, str]:
+        """Create the virtual sink and start capturing ONLY app `app_match`.
 
-        Move o que já está tocando E vigia novos streams do app (via
-        `pactl subscribe`), então você pode iniciar a captura ANTES de dar play —
-        quando o app começar a tocar, o stream é movido automaticamente.
-        `app_match`: substring case-insensitive do nome/binário do app.
-        Retorna (monitor_para_capturar, sink_real_para_a_saida). NÃO mexe no sink
-        padrão — guitarra e demais apps seguem intactos.
+        Moves what is already playing AND watches for new streams of the app
+        (via `pactl subscribe`), so you can start capturing BEFORE hitting play —
+        when the app starts, its stream is moved automatically.
+        `app_match`: case-insensitive substring of the app name/binary.
+        Returns (monitor_to_capture, real_sink_for_output). Does NOT touch the
+        default sink — a guitar and other apps stay intact.
         """
         self._needle = app_match.lower()
-        self._cleanup_existing()                 # remove sinks bandfoss sobrando
-        self.real_sink = self._pick_real_sink()  # alto-falante real (não o virtual)
+        self._cleanup_existing()                 # remove leftover bandfoss sinks
+        self.real_sink = self._pick_real_sink()  # real speaker (not the virtual)
         self.module_id = _run([
             self._pactl, "load-module", "module-null-sink",
             f"sink_name={self.sink_name}",
             "sink_properties=device.description=BandFOSS_Capture",
         ])
-        self._move_matching()                    # move o que já está tocando (se houver)
-        self._start_watcher()                    # vigia novos streams do app
+        self._move_matching()                    # move what is already playing (if any)
+        self._start_watcher()                    # watch for new streams of the app
         return f"{self.sink_name}.monitor", self.real_sink
 
     def _start_watcher(self) -> None:
@@ -186,19 +178,19 @@ class PipeWireRouter:
         self._watch_thread.start()
 
     def _watch_loop(self) -> None:
-        """A cada evento de sink-input novo/alterado, tenta mover o app escolhido."""
+        """On each new/changed sink-input event, try to move the chosen app."""
         try:
             for line in self._watch_proc.stdout:
                 if "sink-input" in line and ("'new'" in line or "'change'" in line):
                     try:
                         self._move_matching()
-                    except Exception:  # noqa: BLE001 — captura pode estar encerrando
+                    except Exception:  # noqa: BLE001 — capture may be shutting down
                         pass
         except Exception:  # noqa: BLE001
             pass
 
     def teardown(self) -> None:
-        """Para o vigia, devolve os streams ao sink real e remove o sink virtual."""
+        """Stop the watcher, return streams to the real sink, remove the virtual sink."""
         if self._watch_proc is not None:
             self._watch_proc.terminate()
             self._watch_proc = None
@@ -207,7 +199,6 @@ class PipeWireRouter:
                 subprocess.run(
                     [self._pactl, "move-sink-input", sid, self.real_sink], check=False
                 )
-        self._moved_ids.clear()
         if self.module_id:
             subprocess.run([self._pactl, "unload-module", self.module_id], check=False)
             self.module_id = None

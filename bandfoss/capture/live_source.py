@@ -1,41 +1,33 @@
-"""Captura ao vivo do áudio do sistema via monitor do PipeWire (`parec`).
+"""Live capture of system audio via the PipeWire monitor (`parec`).
 
-Grava o que estiver tocando no sink padrão (Spotify, navegador, etc.) e entrega
-o PCM em blocos float32 estéreo, através de um `FloatRing`.
+Records whatever is playing on the default sink (Spotify, browser, etc.) and
+delivers PCM in stereo float32 blocks through a `FloatRing`.
 """
 
 from __future__ import annotations
 
-import shutil
 import subprocess
 import threading
-from typing import List, Optional
 
 import numpy as np
 
 from ..config import CHANNELS, SAMPLE_RATE
 from ..engine.ring import FloatRing
-
-
-def _require(tool: str) -> str:
-    path = shutil.which(tool)
-    if path is None:
-        raise RuntimeError(f"'{tool}' não encontrado no PATH.")
-    return path
+from ..util import require_tool
 
 
 def default_monitor() -> str:
-    """Nome do monitor do sink padrão (o que captura o que está tocando)."""
-    pactl = _require("pactl")
+    """Monitor name of the default sink (captures what is currently playing)."""
+    pactl = require_tool("pactl")
     sink = subprocess.check_output([pactl, "get-default-sink"], text=True).strip()
     if not sink:
-        raise RuntimeError("Não foi possível obter o sink padrão (pactl).")
+        raise RuntimeError("Could not determine the default sink (pactl).")
     return f"{sink}.monitor"
 
 
-def list_monitors() -> List[str]:
-    """Lista as fontes de monitor disponíveis (para o usuário escolher)."""
-    pactl = _require("pactl")
+def list_monitors() -> list[str]:
+    """List available monitor sources (for the user to choose from)."""
+    pactl = require_tool("pactl")
     out = subprocess.check_output([pactl, "list", "sources", "short"], text=True)
     monitors = []
     for line in out.splitlines():
@@ -46,11 +38,11 @@ def list_monitors() -> List[str]:
 
 
 class LiveCapture:
-    """Sobe um `parec` no monitor escolhido e alimenta um FloatRing."""
+    """Spawns a `parec` on the chosen monitor and feeds a FloatRing."""
 
     def __init__(
         self,
-        device: Optional[str] = None,
+        device: str | None = None,
         samplerate: int = SAMPLE_RATE,
         channels: int = CHANNELS,
         ring_seconds: float = 8.0,
@@ -61,12 +53,12 @@ class LiveCapture:
         self.channels = channels
         self._read_frames = read_frames
         self._ring = FloatRing(int(ring_seconds * samplerate), channels)
-        self._proc: Optional[subprocess.Popen] = None
-        self._thread: Optional[threading.Thread] = None
+        self._proc: subprocess.Popen | None = None
+        self._thread: threading.Thread | None = None
         self._stop = threading.Event()
 
     def start(self) -> None:
-        parec = _require("parec")
+        parec = require_tool("parec")
         cmd = [
             parec,
             "--format=float32le",
@@ -94,8 +86,8 @@ class LiveCapture:
             self._ring.write(arr[:n].reshape(-1, self.channels))
         self._ring.close()
 
-    def read_exact(self, n: int) -> Optional[np.ndarray]:
-        """Bloqueia até obter `n` frames; retorna None se a captura encerrar."""
+    def read_exact(self, n: int) -> np.ndarray | None:
+        """Block until `n` frames are available; return None if capture ends."""
         arr, avail = self._ring.read(n, block=True)
         if avail < n:
             return None

@@ -1,14 +1,14 @@
-"""Janela principal do BandFOSS (PySide6) — captura e separação AO VIVO.
+"""BandFOSS main window (PySide6) — LIVE capture and separation.
 
-Fluxo: escolher o app -> capturar do PipeWire -> separar em tempo real ->
-mixer com fader + mute/solo por stem.
+Flow: pick the app -> capture from PipeWire -> separate in real time ->
+mixer with fader + mute/solo per stem.
 """
 
 from __future__ import annotations
 
 import platform
 import re
-from typing import Dict, Optional
+from collections.abc import Callable
 
 from PySide6.QtCore import Qt, QThread, Signal
 from PySide6.QtGui import QFont
@@ -41,7 +41,7 @@ from . import theme
 
 
 class LiveModelWorker(QThread):
-    """Carrega o modelo Demucs ao vivo (lento) fora da thread da UI."""
+    """Loads the (slow) live Demucs model off the UI thread."""
 
     ready = Signal(object)   # Separator
     failed = Signal(str)
@@ -59,9 +59,9 @@ class LiveModelWorker(QThread):
 
 
 class AppComboBox(QComboBox):
-    """Combo de apps que se reatualiza sozinho toda vez que é aberto."""
+    """App combo box that refreshes itself every time it is opened."""
 
-    def __init__(self, populate):
+    def __init__(self, populate: Callable[[], None]):
         super().__init__()
         self._populate = populate
 
@@ -71,9 +71,16 @@ class AppComboBox(QComboBox):
 
 
 class StemStrip(QWidget):
-    """Coluna de controle de um stem: fader vertical + mute + solo + nome."""
+    """Control column for one stem: vertical fader + mute + solo + name."""
 
-    def __init__(self, name: str, on_gain, on_mute, on_solo, color: str = theme.AMBER):
+    def __init__(
+        self,
+        name: str,
+        on_gain: Callable[[str, float], None],
+        on_mute: Callable[[str, bool], None],
+        on_solo: Callable[[str, bool], None],
+        color: str = theme.AMBER,
+    ):
         super().__init__()
         self._name = name
         self._on_gain = on_gain
@@ -88,7 +95,7 @@ class StemStrip(QWidget):
         dot.setStyleSheet(f"color: {color}; font-size: 14px;")
 
         self.fader = QSlider(Qt.Vertical)
-        self.fader.setRange(0, 150)          # 0–150% de ganho
+        self.fader.setRange(0, 150)          # 0–150% gain
         self.fader.setValue(100)
         self.fader.setMinimumHeight(160)
         self.fader.setStyleSheet(theme.fader_style(color))
@@ -125,13 +132,13 @@ class StemStrip(QWidget):
         layout.addLayout(btn_row)
         layout.addWidget(title)
 
-        # esmaece a coluna inteira quando o canal não está audível
+        # dim the whole column when the channel is not audible
         self._opacity = QGraphicsOpacityEffect(self)
         self.setGraphicsEffect(self._opacity)
         self._opacity.setOpacity(1.0)
 
     def set_active(self, active: bool) -> None:
-        """Aceso (audível) = opaco; apagado (mudo ou silenciado por solo) = esmaecido."""
+        """Lit (audible) = opaque; off (muted or silenced by solo) = dimmed."""
         self._opacity.setOpacity(1.0 if active else 0.28)
 
 
@@ -142,18 +149,18 @@ class MainWindow(QWidget):
         self.resize(720, 520)
         self.setStyleSheet(theme.STYLESHEET)
 
-        self.engine = None                 # LiveEngine quando ao vivo
-        self.capture = None                # LiveCapture quando ao vivo
-        self.router = None                 # PipeWireRouter quando isolando
-        self.live_worker: Optional[LiveModelWorker] = None
-        self._target = None                # objeto ativo p/ ganhos (o engine)
-        self.strips: Dict[str, StemStrip] = {}
+        self.engine = None                 # LiveEngine while live
+        self.capture = None                # LiveCapture while live
+        self.router = None                 # PipeWireRouter while isolating
+        self.live_worker: LiveModelWorker | None = None
+        self._target = None                # active object for gains (the engine)
+        self.strips: dict[str, StemStrip] = {}
 
         root = QVBoxLayout(self)
         root.setContentsMargins(18, 14, 18, 14)
         root.setSpacing(10)
 
-        # --- cabeçalho (ponto focal): wordmark BAND·FOSS ---
+        # --- header (focal point): BAND·FOSS wordmark ---
         header = QHBoxLayout()
         wordmark = QLabel(
             f"<span style='color:{theme.TEXT}'>BAND</span>"
@@ -178,12 +185,12 @@ class MainWindow(QWidget):
         header.addStretch(1)
         root.addLayout(header)
 
-        # --- ao vivo: App -> Capturar ---
+        # --- live: App -> Capture ---
         live_row = QHBoxLayout()
         live_row.addWidget(QLabel(t("app_label")))
         self.app_box = AppComboBox(self._populate_apps)
         self.app_box.setMinimumWidth(240)
-        self.app_box.setEditable(True)          # dá para digitar um app que ainda não toca
+        self.app_box.setEditable(True)          # lets you type an app not yet playing
         self.app_box.setInsertPolicy(QComboBox.NoInsert)
         self.app_box.lineEdit().setPlaceholderText(t("app_placeholder"))
         self._populate_apps()
@@ -197,7 +204,7 @@ class MainWindow(QWidget):
         live_row.addWidget(self.live_status)
         root.addLayout(live_row)
 
-        # --- Avançado (recolhido): modelo, latência, modo monitor ---
+        # --- Advanced (collapsed): model, latency, monitor mode ---
         self.adv_btn = QPushButton("▸ " + t("advanced"))
         self.adv_btn.setObjectName("advBtn")
         self.adv_btn.setCheckable(True)
@@ -205,7 +212,7 @@ class MainWindow(QWidget):
         root.addWidget(self.adv_btn)
         root.addWidget(self._build_advanced_panel())
 
-        # --- faders dos stems ---
+        # --- stem faders ---
         self.strip_row = QHBoxLayout()
         self.strip_row.setContentsMargins(14, 14, 14, 14)
         self.strip_row.setSpacing(16)
@@ -215,7 +222,7 @@ class MainWindow(QWidget):
         strip_frame.setMinimumHeight(280)
         root.addWidget(strip_frame, 1)
 
-        # --- footer: crédito + link ---
+        # --- footer: credit + link ---
         footer = QLabel(
             f"<span style='color:{theme.MUTED}'>{t('footer_prefix')}</span>"
             f"<a href='https://github.com/vforvilela' "
@@ -227,14 +234,14 @@ class MainWindow(QWidget):
         footer.setStyleSheet("font-size: 11px;")
         root.addWidget(footer)
 
-        # captura ao vivo depende do PipeWire (Linux).
+        # live capture depends on PipeWire (Linux).
         if platform.system() != "Linux":
             self.app_box.setEnabled(False)
             self.live_btn.setEnabled(False)
             self.live_btn.setToolTip(t("linux_only_tip"))
             self.live_status.setText(t("requires_linux"))
 
-    # ---- painel avançado --------------------------------------------------
+    # ---- advanced panel ---------------------------------------------------
     def _build_advanced_panel(self) -> QWidget:
         self.adv_panel = QWidget()
         self.adv_panel.setObjectName("advPanel")
@@ -277,7 +284,7 @@ class MainWindow(QWidget):
         self.adv_panel.setVisible(on)
         self.adv_btn.setText(("▾ " if on else "▸ ") + t("advanced"))
 
-    # ---- fontes de captura ------------------------------------------------
+    # ---- capture sources --------------------------------------------------
     def _populate_monitors(self) -> None:
         self.monitor_box.clear()
         try:
@@ -287,11 +294,11 @@ class MainWindow(QWidget):
             ordered = [default] + [m for m in monitors if m != default]
             for m in ordered:
                 self.monitor_box.addItem(m)
-        except Exception:  # noqa: BLE001 — sem PipeWire/pactl
-            self.monitor_box.addItem("(monitor padrão)")
+        except Exception:  # noqa: BLE001 — no PipeWire/pactl
+            self.monitor_box.addItem("(default monitor)")
 
     def _populate_apps(self) -> None:
-        """Lista os apps tocando agora; preserva o que o usuário digitou."""
+        """List apps playing now; preserve what the user typed."""
         typed = self.app_box.currentText().strip() if self.app_box.isEditable() else ""
         self.app_box.clear()
         try:
@@ -312,11 +319,11 @@ class MainWindow(QWidget):
             self.app_box.setCurrentText("")
 
     def _on_isolate_toggled(self, on: bool) -> None:
-        # isolado -> usa o App (linha principal); sem isolar -> usa o Monitor
+        # isolated -> use the App (main row); no isolation -> use the Monitor
         self.app_box.setEnabled(on)
         self.monitor_box.setEnabled(not on)
 
-    # ---- captura ao vivo --------------------------------------------------
+    # ---- live capture -----------------------------------------------------
     def _toggle_live(self, on: bool) -> None:
         if on:
             self._start_live()
@@ -375,7 +382,7 @@ class MainWindow(QWidget):
             )
             self._target = self.engine
 
-            # monta os faders (voz primeiro, "outros" por último)
+            # build the faders (vocals first, "other" last)
             self._clear_strips()
             for name in order_stems(self.engine.names):
                 strip = StemStrip(name, self._set_gain, self._set_mute, self._set_solo,
@@ -408,7 +415,7 @@ class MainWindow(QWidget):
         if self.capture:
             self.capture.stop()
         if self.router:
-            self.router.teardown()          # restaura o sink padrão e remove o virtual
+            self.router.teardown()          # restore the default sink, remove the virtual one
         self.engine = None
         self.capture = None
         self.router = None
@@ -425,7 +432,7 @@ class MainWindow(QWidget):
             strip.setParent(None)
         self.strips.clear()
 
-    # ---- callbacks de stem (roteados para o engine ativo) -----------------
+    # ---- stem callbacks (routed to the active engine) ---------------------
     def _set_gain(self, name: str, gain: float) -> None:
         if self._target:
             self._target.set_gain(name, gain)
@@ -448,7 +455,7 @@ class MainWindow(QWidget):
         self._update_strip_states()
 
     def _update_strip_states(self) -> None:
-        """Esmaece as colunas que não estão audíveis (mute, ou silenciadas por solo)."""
+        """Dim the columns that are not audible (muted, or silenced by solo)."""
         soloed = next((n for n, s in self.strips.items() if s.solo_btn.isChecked()), None)
         for name, strip in self.strips.items():
             if soloed is not None:
@@ -469,7 +476,7 @@ class MainWindow(QWidget):
 
 def run() -> int:
     app = QApplication.instance() or QApplication([])
-    app.setStyle("Fusion")   # base consistente que desenha bem os controles do tema
+    app.setStyle("Fusion")   # consistent base that draws the themed controls well
     window = MainWindow()
     window.show()
     return app.exec()

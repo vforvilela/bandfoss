@@ -1,14 +1,25 @@
 [project]
 name = "bandfoss"
 version = "0.1.0"
-description = "BandFOSS — desktop stem separation & mixer (open source, JBL BandBox-style), Linux + CUDA"
+description = "BandFOSS — real-time stem separation & mixer for live system audio (open source, JBL BandBox-style)"
+readme = "README.md"
 requires-python = ">=3.10"
+license = { text = "MIT" }
+authors = [{ name = "Vilela" }]
+keywords = ["audio", "stem-separation", "demucs", "mixer", "karaoke", "pipewire"]
+classifiers = [
+    "License :: OSI Approved :: MIT License",
+    "Programming Language :: Python :: 3",
+    "Operating System :: POSIX :: Linux",
+    "Topic :: Multimedia :: Sound/Audio",
+    "Environment :: X11 Applications :: Qt",
+]
 dependencies = [
-    # Núcleo de separação
+    # Separation core
     "demucs>=4.0.1",
     "torch>=2.1",
     "torchaudio>=2.1",
-    # Áudio / DSP
+    # Audio / DSP
     "numpy>=1.24",
     "soundfile>=0.12",
     "sounddevice>=0.4.6",
@@ -17,8 +28,15 @@ dependencies = [
 ]
 
 [project.optional-dependencies]
-# yt-dlp normalmente vem instalado no sistema; incluído aqui para ambientes isolados.
+# Offline helper (file/URL loading used by scripts/smoke_test.py). yt-dlp is
+# usually installed system-wide; listed here for isolated environments.
 download = ["yt-dlp>=2024.1"]
+# Development: linting and tests.
+dev = ["pytest>=7", "ruff>=0.4"]
+
+[project.urls]
+Homepage = "https://github.com/vforvilela/bandfoss"
+Repository = "https://github.com/vforvilela/bandfoss"
 
 [project.scripts]
 bandfoss = "bandfoss.app:main"
@@ -29,3 +47,21 @@ build-backend = "setuptools.build_meta"
 
 [tool.setuptools.packages.find]
 include = ["bandfoss*"]
+
+[tool.ruff]
+line-length = 100
+target-version = "py310"
+
+[tool.ruff.lint]
+# Pragmatic set: correctness/style/imports/naming/bugbear, plus a few targeted
+# rules the code already annotates for with `# noqa` (BLE001 broad-except around
+# optional subprocess deps; ANN001 argument annotations; D401 imperative
+# docstrings). Full docstring/annotation enforcement is intentionally left off.
+select = ["E", "F", "W", "I", "N", "B", "UP", "BLE001", "ANN001", "D401"]
+
+[tool.ruff.lint.per-file-ignores]
+"tests/*" = ["ANN001", "E402"]  # E402: imports after pytest.importorskip
+"scripts/*" = ["ANN001"]
+
+[tool.ruff.lint.pydocstyle]
+convention = "google"
