@@ -60,11 +60,20 @@ bandfoss
 
 Ao parar, seu áudio volta ao normal.
 
-### 🎸 Tocar guitarra junto
+### 🎶 Tocar junto — qualquer instrumento
 
-Abra **Avançado**, escolha o modelo **Guitarra · 6 stems**, capture o Chrome e aplique
-o preset **Guitarrista (sem guitarra)**. A guitarra gravada some da música e a sua toca
-por cima. Em **Avançado** também está a **Latência** (menor = mais responsivo).
+Silencie a faixa do **seu** instrumento e toque/cante por cima. Escolha o preset
+correspondente (ou aperte **M** na faixa):
+
+- **Karaokê** → sem vocal (você canta)
+- **Baterista** → sem bateria
+- **Baixista** → sem baixo
+- **Guitarrista** / **Tecladista** → sem guitarra / sem piano
+
+> Para separar **guitarra** e **piano** individualmente, abra **Avançado** e escolha o
+> modelo **Guitarra · 6 stems** (o rápido, de 4 stems, tem bateria/baixo/vocal/outros —
+> guitarra e teclado ficam juntos em "outros"). Em **Avançado** também está a
+> **Latência** (menor = mais responsivo).
 
 ---
 

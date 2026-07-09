@@ -68,13 +68,15 @@ STEM_LABELS = {
     "piano": "Piano",
 }
 
-# Presets estilo JBL BandBox: stems a serem MUTADOS ao ativar o preset.
+# Presets: stems a serem MUTADOS ao ativar. Um por instrumento — toque/cante por cima.
+# (guitar/piano só existem no modelo de 6 stems; nos outros modelos são ignorados.)
 PRESETS = {
     "Original": [],
     "Karaokê (sem vocal)": ["vocals"],
     "Baterista (sem bateria)": ["drums"],
     "Baixista (sem baixo)": ["bass"],
     "Guitarrista (sem guitarra)": ["guitar"],
+    "Tecladista (sem piano)": ["piano"],
     "Só vocal (a capella)": ["drums", "bass", "other", "guitar", "piano"],
     "Instrumental": ["vocals"],
 }
