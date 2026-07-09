@@ -46,8 +46,17 @@ bandbox            # ou: python -m bandbox
      realimentação. Ao parar, tudo é restaurado automaticamente.
    - Sem isolar (modo avançado): captura o monitor escolhido e toca no default —
      pode haver eco/mistura.
-3. Mexa nos faders/presets em tempo real. Latência ≈ 4 s (tamanho da janela do
+3. Escolha o modelo ao vivo:
+   - **Rápido · 4 stems** — bateria/baixo/vocal/outros.
+   - **Guitarra · 6 stems** (`htdemucs_6s`) — adiciona guitarra e piano, permitindo
+     mutar especificamente a guitarra gravada da faixa (ex.: preset
+     *Guitarrista (sem guitarra)*) para tocar por cima. Um pouco mais lento.
+4. Mexa nos faders/presets em tempo real. Latência ≈ 4 s (tamanho da janela do
    Demucs; ajustável em `config.py`).
+
+> **Tocar guitarra junto:** deixe o Chrome como app capturado, escolha
+> *Guitarra · 6 stems*, aplique o preset *Guitarrista (sem guitarra)* — a guitarra
+> gravada some da música e sua guitarra ao vivo (não capturada) toca por cima.
 
 ### Teste headless (sem GUI)
 

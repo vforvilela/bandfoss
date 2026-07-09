@@ -14,8 +14,14 @@ MODEL_4STEM = "htdemucs_ft"
 MODEL_6STEM = "htdemucs_6s"
 DEFAULT_MODEL = MODEL_4STEM
 
-# Modelo usado na captura AO VIVO: modelo único (não-ensemble) por velocidade.
-LIVE_MODEL = "htdemucs"
+# Modelos disponíveis na captura AO VIVO (rótulo -> nome do modelo Demucs).
+# "Rápido" separa 4 stems; "Guitarra" separa 6 stems (inclui guitarra/piano),
+# permitindo mutar especificamente a guitarra gravada da faixa.
+LIVE_MODELS = {
+    "Rápido · 4 stems": "htdemucs",
+    "Guitarra · 6 stems": "htdemucs_6s",
+}
+LIVE_MODEL = "htdemucs"          # padrão
 
 # Janela deslizante da separação ao vivo.
 # Latência ≈ LIVE_WINDOW_SEC; overlap de 50% (hop = janela/2) dá overlap-add
@@ -39,6 +45,7 @@ PRESETS = {
     "Karaokê (sem vocal)": ["vocals"],
     "Baterista (sem bateria)": ["drums"],
     "Baixista (sem baixo)": ["bass"],
+    "Guitarrista (sem guitarra)": ["guitar"],
     "Só vocal (a capella)": ["drums", "bass", "other", "guitar", "piano"],
     "Instrumental": ["vocals"],
 }

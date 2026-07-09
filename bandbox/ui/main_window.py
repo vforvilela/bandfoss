@@ -29,7 +29,7 @@ from PySide6.QtWidgets import (
 
 from ..config import (
     DEFAULT_MODEL,
-    LIVE_MODEL,
+    LIVE_MODELS,
     LIVE_WINDOW_SEC,
     PRESETS,
     SAMPLE_RATE,
@@ -73,10 +73,14 @@ class LiveModelWorker(QThread):
     ready = Signal(object)   # Separator
     failed = Signal(str)
 
+    def __init__(self, model_name: str):
+        super().__init__()
+        self.model_name = model_name
+
     def run(self) -> None:  # noqa: D401
         try:
             from ..engine.separator import Separator
-            self.ready.emit(Separator(LIVE_MODEL))
+            self.ready.emit(Separator(self.model_name))
         except Exception as exc:  # noqa: BLE001
             self.failed.emit(str(exc))
 
@@ -193,6 +197,15 @@ class MainWindow(QWidget):
 
         self.isolate_chk.toggled.connect(self._on_isolate_toggled)
 
+        # seletor do modelo ao vivo (4 stems rápido vs 6 stems com guitarra)
+        self.live_model_box = QComboBox()
+        self.live_model_box.addItems(LIVE_MODELS.keys())
+        self.live_model_box.setToolTip(
+            "Rápido (4 stems): bateria/baixo/vocal/outros.\n"
+            "Guitarra (6 stems): adiciona guitarra e piano — permite mutar\n"
+            "especificamente a guitarra gravada da faixa (um pouco mais lento)."
+        )
+
         self.live_btn = QPushButton("🔴 Capturar ao vivo")
         self.live_btn.setCheckable(True)
         self.live_btn.toggled.connect(self._toggle_live)
@@ -202,6 +215,7 @@ class MainWindow(QWidget):
         live_row.addWidget(self.app_box, 1)
         live_row.addWidget(self.refresh_btn)
         live_row.addWidget(self.monitor_box, 1)
+        live_row.addWidget(self.live_model_box)
         live_row.addWidget(self.live_btn)
         live_row.addWidget(self.live_status)
         root.addLayout(live_row)
@@ -405,9 +419,11 @@ class MainWindow(QWidget):
         self.stop_btn.setEnabled(False)
         self.live_btn.setText("Carregando…")
         self.live_btn.setEnabled(False)
+        self.live_model_box.setEnabled(False)
         self.live_status.setText("Carregando modelo ao vivo…")
 
-        self.live_worker = LiveModelWorker()
+        model_name = LIVE_MODELS[self.live_model_box.currentText()]
+        self.live_worker = LiveModelWorker(model_name)
         self.live_worker.ready.connect(self._on_live_ready)
         self.live_worker.failed.connect(self._on_live_failed)
         self.live_worker.start()
@@ -417,6 +433,7 @@ class MainWindow(QWidget):
         self.live_btn.setEnabled(True)
         self.live_btn.setText("🔴 Capturar ao vivo")
         self.live_btn.setChecked(False)
+        self.live_model_box.setEnabled(True)
         self.separate_btn.setEnabled(True)
         QMessageBox.critical(self, "Falha na captura ao vivo", msg)
 
@@ -494,6 +511,7 @@ class MainWindow(QWidget):
         self.preset_box.setEnabled(False)
         self.live_btn.setText("🔴 Capturar ao vivo")
         self.live_btn.setChecked(False)
+        self.live_model_box.setEnabled(True)
         self.live_status.setText("")
         self.separate_btn.setEnabled(True)
 
