@@ -22,8 +22,8 @@ def main() -> int:
     ap.add_argument("--play", action="store_true", help="tocar 5s do mix após separar")
     args = ap.parse_args()
 
-    from bandbox.capture.file_source import load_source
-    from bandbox.engine.separator import Separator
+    from bandfoss.capture.file_source import load_source
+    from bandfoss.engine.separator import Separator
 
     print(f"[1/2] Carregando fonte: {args.source}")
     pcm = load_source(args.source)
@@ -41,7 +41,7 @@ def main() -> int:
         print(f"      {name:8s}  RMS={rms:.4f}  shape={arr.shape}")
 
     if args.play:
-        from bandbox.engine.mixer import StemMixer
+        from bandfoss.engine.mixer import StemMixer
         import time
 
         mixer = StemMixer(stems, samplerate=sep.samplerate)

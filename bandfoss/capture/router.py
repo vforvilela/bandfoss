@@ -1,11 +1,11 @@
 """Roteamento seletivo no PipeWire para captura ao vivo por aplicativo.
 
 Cria um *sink virtual* (null sink) e move para ele **apenas o app escolhido**
-(ex.: Chrome). O BandBox captura o monitor desse sink e toca o resultado
+(ex.: Chrome). O BandFOSS captura o monitor desse sink e toca o resultado
 processado no alto-falante real. Todo o resto — inclusive uma guitarra ao vivo —
 continua tocando normalmente nos alto-falantes, sem captura nem processamento.
 
-  Chrome ─► [sink virtual] ─► monitor ─► BandBox ─► pacat ─► [sink real] ─► 🔊
+  Chrome ─► [sink virtual] ─► monitor ─► BandFOSS ─► pacat ─► [sink real] ─► 🔊
   Guitarra ──────────────────────────────────────────────► [sink real] ─► 🔊
 """
 
@@ -56,7 +56,7 @@ def list_playback_apps() -> List[Dict[str, str]]:
 class PipeWireRouter:
     """Move o app escolhido para um sink virtual; devolve tudo no teardown."""
 
-    def __init__(self, sink_name: str = "bandbox_capture"):
+    def __init__(self, sink_name: str = "bandfoss_capture"):
         self.sink_name = sink_name
         self._pactl = _require("pactl")
         self.module_id: Optional[str] = None
@@ -128,12 +128,12 @@ class PipeWireRouter:
         do aplicativo. Retorna (monitor_para_capturar, sink_real_para_a_saida).
         NÃO altera o sink padrão — guitarra e demais apps seguem intactos.
         """
-        self._cleanup_existing()                 # remove sinks bandbox sobrando
+        self._cleanup_existing()                 # remove sinks bandfoss sobrando
         self.real_sink = self._pick_real_sink()  # alto-falante real (não o virtual)
         self.module_id = _run([
             self._pactl, "load-module", "module-null-sink",
             f"sink_name={self.sink_name}",
-            "sink_properties=device.description=BandBox_Capture",
+            "sink_properties=device.description=BandFOSS_Capture",
         ])
 
         needle = app_match.lower()

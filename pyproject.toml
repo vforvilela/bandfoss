@@ -1,7 +1,7 @@
 [project]
-name = "bandbox"
+name = "bandfoss"
 version = "0.1.0"
-description = "Desktop stem separation & mixer (open source BandBox-style), Linux + CUDA"
+description = "BandFOSS — desktop stem separation & mixer (open source, JBL BandBox-style), Linux + CUDA"
 requires-python = ">=3.10"
 dependencies = [
     # Núcleo de separação
@@ -21,11 +21,11 @@ dependencies = [
 download = ["yt-dlp>=2024.1"]
 
 [project.scripts]
-bandbox = "bandbox.app:main"
+bandfoss = "bandfoss.app:main"
 
 [build-system]
 requires = ["setuptools>=68"]
 build-backend = "setuptools.build_meta"
 
 [tool.setuptools.packages.find]
-include = ["bandbox*"]
+include = ["bandfoss*"]

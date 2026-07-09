@@ -1,4 +1,4 @@
-"""Janela principal do BandBox (PySide6).
+"""Janela principal do BandFOSS (PySide6).
 
 Fluxo: carregar fonte (arquivo/URL) -> separar em QThread -> montar mixer com
 um fader + mute/solo por stem, transporte e presets.
@@ -10,12 +10,14 @@ from typing import Dict, Optional
 
 import numpy as np
 from PySide6.QtCore import Qt, QThread, QTimer, Signal
+from PySide6.QtGui import QFont
 from PySide6.QtWidgets import (
     QApplication,
     QCheckBox,
     QComboBox,
     QFileDialog,
     QFrame,
+    QGridLayout,
     QHBoxLayout,
     QLabel,
     QLineEdit,
@@ -34,10 +36,12 @@ from ..config import (
     LIVE_WINDOW_SEC,
     PRESETS,
     SAMPLE_RATE,
+    STEM_COLORS,
     STEM_LABELS,
     order_stems,
 )
 from ..engine.mixer import StemMixer
+from . import theme
 
 
 class SeparationWorker(QThread):
@@ -87,10 +91,22 @@ class LiveModelWorker(QThread):
             self.failed.emit(str(exc))
 
 
+class AppComboBox(QComboBox):
+    """Combo de apps que se reatualiza sozinho toda vez que é aberto."""
+
+    def __init__(self, populate):
+        super().__init__()
+        self._populate = populate
+
+    def showPopup(self):  # noqa: N802
+        self._populate()
+        super().showPopup()
+
+
 class StemStrip(QWidget):
     """Coluna de controle de um stem: fader vertical + mute + solo + nome."""
 
-    def __init__(self, name: str, on_gain, on_mute, on_solo):
+    def __init__(self, name: str, on_gain, on_mute, on_solo, color: str = theme.AMBER):
         super().__init__()
         self._name = name
         self._on_gain = on_gain
@@ -100,34 +116,44 @@ class StemStrip(QWidget):
         layout = QVBoxLayout(self)
         layout.setAlignment(Qt.AlignHCenter)
 
+        # ponto colorido do canal (topo)
+        dot = QLabel("●")
+        dot.setAlignment(Qt.AlignHCenter)
+        dot.setStyleSheet(f"color: {color}; font-size: 14px;")
+
         self.fader = QSlider(Qt.Vertical)
         self.fader.setRange(0, 150)          # 0–150% de ganho
         self.fader.setValue(100)
         self.fader.setMinimumHeight(160)
+        self.fader.setStyleSheet(theme.fader_style(color))
         self.fader.valueChanged.connect(lambda v: self._on_gain(name, v / 100.0))
 
         self.value_label = QLabel("100%")
         self.value_label.setAlignment(Qt.AlignHCenter)
+        self.value_label.setStyleSheet(f"color: {theme.MUTED};")
         self.fader.valueChanged.connect(lambda v: self.value_label.setText(f"{v}%"))
 
         self.mute_btn = QPushButton("M")
+        self.mute_btn.setObjectName("muteBtn")
         self.mute_btn.setCheckable(True)
-        self.mute_btn.setFixedWidth(40)
+        self.mute_btn.setFixedWidth(38)
         self.mute_btn.toggled.connect(lambda on: self._on_mute(name, on))
 
         self.solo_btn = QPushButton("S")
+        self.solo_btn.setObjectName("soloBtn")
         self.solo_btn.setCheckable(True)
-        self.solo_btn.setFixedWidth(40)
+        self.solo_btn.setFixedWidth(38)
         self.solo_btn.toggled.connect(lambda on: self._on_solo(name, on))
 
         btn_row = QHBoxLayout()
         btn_row.addWidget(self.mute_btn)
         btn_row.addWidget(self.solo_btn)
 
-        title = QLabel(STEM_LABELS.get(name, name.capitalize()))
+        title = QLabel(STEM_LABELS.get(name, name.capitalize()).upper())
         title.setAlignment(Qt.AlignHCenter)
-        title.setStyleSheet("font-weight: bold;")
+        title.setStyleSheet(f"color: {color}; font-weight: 800; letter-spacing: 1px;")
 
+        layout.addWidget(dot)
         layout.addWidget(self.fader, alignment=Qt.AlignHCenter)
         layout.addWidget(self.value_label)
         layout.addLayout(btn_row)
@@ -137,8 +163,9 @@ class StemStrip(QWidget):
 class MainWindow(QWidget):
     def __init__(self):
         super().__init__()
-        self.setWindowTitle("BandBox — Separador de Stems")
-        self.resize(680, 460)
+        self.setWindowTitle("BandFOSS — Separador de Stems")
+        self.resize(720, 560)
+        self.setStyleSheet(theme.STYLESHEET)
 
         self.mixer: Optional[StemMixer] = None
         self.engine = None                 # LiveEngine quando ao vivo
@@ -150,97 +177,84 @@ class MainWindow(QWidget):
         self.strips: Dict[str, StemStrip] = {}
 
         root = QVBoxLayout(self)
+        root.setContentsMargins(18, 14, 18, 14)
+        root.setSpacing(10)
 
-        # --- barra de fonte ---
+        # --- cabeçalho (ponto focal): wordmark BAND·BOX ---
+        header = QHBoxLayout()
+        wordmark = QLabel(
+            f"<span style='color:{theme.TEXT}'>BAND</span>"
+            f"<span style='color:{theme.AMBER}'>FOSS</span>"
+        )
+        wordmark.setObjectName("wordmark")
+        wf = QFont()
+        wf.setPointSize(24)
+        wf.setWeight(QFont.Black)
+        wf.setLetterSpacing(QFont.PercentageSpacing, 118)
+        wordmark.setFont(wf)
+        subtitle = QLabel("STEM MIXER")
+        subtitle.setObjectName("subtitle")
+        sf = QFont()
+        sf.setPointSize(9)
+        sf.setWeight(QFont.DemiBold)
+        sf.setLetterSpacing(QFont.PercentageSpacing, 260)
+        subtitle.setFont(sf)
+        header.addWidget(wordmark)
+        header.addSpacing(10)
+        header.addWidget(subtitle, 0, Qt.AlignVCenter)
+        header.addStretch(1)
+        root.addLayout(header)
+
+        # --- fonte: arquivo/URL -> Separar ---
         src_row = QHBoxLayout()
         self.source_input = QLineEdit()
-        self.source_input.setPlaceholderText(
-            "Caminho do arquivo ou URL (YouTube Music/YouTube)…"
-        )
+        self.source_input.setPlaceholderText("Arquivo, URL ou nome da música…")
         browse_btn = QPushButton("Abrir…")
         browse_btn.clicked.connect(self._browse)
-        self.model_box = QComboBox()
-        self.model_box.addItems([DEFAULT_MODEL, "htdemucs_6s"])
         self.separate_btn = QPushButton("Separar")
+        self.separate_btn.setObjectName("primaryBtn")
         self.separate_btn.clicked.connect(self._start_separation)
         src_row.addWidget(self.source_input, 1)
         src_row.addWidget(browse_btn)
-        src_row.addWidget(self.model_box)
         src_row.addWidget(self.separate_btn)
         root.addLayout(src_row)
 
-        # --- progresso ---
         self.progress = QProgressBar()
         self.progress.setRange(0, 100)
         self.progress.setVisible(False)
         root.addWidget(self.progress)
 
-        # --- captura ao vivo (Fase 2) ---
+        # --- ao vivo: App -> Capturar ---
         live_row = QHBoxLayout()
-        self.isolate_chk = QCheckBox("Capturar só o app:")
-        self.isolate_chk.setChecked(True)
-        self.isolate_chk.setToolTip(
-            "Move apenas o app escolhido (ex.: Chrome) para um sink virtual e\n"
-            "processa só ele. Sua guitarra ao vivo e todo o resto seguem tocando\n"
-            "normalmente, sem captura nem processamento."
-        )
-        # dropdown de apps tocando (modo isolado)
-        self.app_box = QComboBox()
-        self.app_box.setMinimumWidth(200)
-        self.refresh_btn = QPushButton("↻")
-        self.refresh_btn.setFixedWidth(32)
-        self.refresh_btn.setToolTip("Atualizar lista de apps tocando")
-        self.refresh_btn.clicked.connect(self._populate_apps)
-        # dropdown de monitor (modo avançado, sem isolamento)
-        self.monitor_box = QComboBox()
-        self.monitor_box.setMinimumWidth(200)
-        self._populate_monitors()
+        live_row.addWidget(QLabel("App:"))
+        self.app_box = AppComboBox(self._populate_apps)
+        self.app_box.setMinimumWidth(220)
         self._populate_apps()
-
-        self.isolate_chk.toggled.connect(self._on_isolate_toggled)
-
-        # seletor do modelo ao vivo (4 stems rápido vs 6 stems com guitarra)
-        self.live_model_box = QComboBox()
-        self.live_model_box.addItems(LIVE_MODELS.keys())
-        self.live_model_box.setToolTip(
-            "Rápido (4 stems): bateria/baixo/vocal/outros.\n"
-            "Guitarra (6 stems): adiciona guitarra e piano — permite mutar\n"
-            "especificamente a guitarra gravada da faixa (um pouco mais lento)."
-        )
-
-        # seletor de latência (tamanho da janela) — menor = menos atraso
-        self.latency_box = QComboBox()
-        self.latency_box.addItems(LIVE_WINDOW_OPTIONS.keys())
-        self.latency_box.setToolTip(
-            "Atraso do áudio ao vivo = tamanho da janela do Demucs (não é o\n"
-            "processamento). Menor = mais responsivo; maior = melhor separação."
-        )
-        # seleciona a opção que casa com o padrão
-        for i, (lbl, sec) in enumerate(LIVE_WINDOW_OPTIONS.items()):
-            if sec == LIVE_WINDOW_SEC:
-                self.latency_box.setCurrentIndex(i)
-
-        self.live_btn = QPushButton("🔴 Capturar ao vivo")
+        self.live_btn = QPushButton("● Capturar ao vivo")
+        self.live_btn.setObjectName("recordBtn")
         self.live_btn.setCheckable(True)
         self.live_btn.toggled.connect(self._toggle_live)
         self.live_status = QLabel("")
-
-        live_row.addWidget(self.isolate_chk)
         live_row.addWidget(self.app_box, 1)
-        live_row.addWidget(self.refresh_btn)
-        live_row.addWidget(self.monitor_box, 1)
-        live_row.addWidget(self.live_model_box)
-        live_row.addWidget(self.latency_box)
         live_row.addWidget(self.live_btn)
         live_row.addWidget(self.live_status)
         root.addLayout(live_row)
-        self._on_isolate_toggled(True)   # estado inicial: modo isolado
 
-        # --- área dos stems ---
+        # --- Avançado (recolhido): modelos, latência, modo monitor ---
+        self.adv_btn = QPushButton("▸ AVANÇADO")
+        self.adv_btn.setObjectName("advBtn")
+        self.adv_btn.setCheckable(True)
+        self.adv_btn.toggled.connect(self._toggle_advanced)
+        root.addWidget(self.adv_btn)
+        root.addWidget(self._build_advanced_panel())
+
+        # --- faders dos stems ---
         self.strip_row = QHBoxLayout()
+        self.strip_row.setContentsMargins(14, 14, 14, 14)
+        self.strip_row.setSpacing(16)
         strip_frame = QFrame()
+        strip_frame.setObjectName("stemPanel")
         strip_frame.setLayout(self.strip_row)
-        strip_frame.setFrameShape(QFrame.StyledPanel)
         strip_frame.setMinimumHeight(280)
         root.addWidget(strip_frame, 1)
 
@@ -255,14 +269,14 @@ class MainWindow(QWidget):
         preset_row.addStretch(1)
         root.addLayout(preset_row)
 
-        # --- transporte ---
-        transport = QHBoxLayout()
+        # --- transporte (só no modo arquivo; some ao vivo) ---
+        self.transport_widget = QWidget()
+        transport = QHBoxLayout(self.transport_widget)
+        transport.setContentsMargins(0, 0, 0, 0)
         self.play_btn = QPushButton("▶ Play")
         self.play_btn.clicked.connect(self._toggle_play)
-        self.play_btn.setEnabled(False)
         self.stop_btn = QPushButton("■ Stop")
         self.stop_btn.clicked.connect(self._stop)
-        self.stop_btn.setEnabled(False)
         self.seek = QSlider(Qt.Horizontal)
         self.seek.setRange(0, 1000)
         self.seek.sliderMoved.connect(self._on_seek)
@@ -271,12 +285,66 @@ class MainWindow(QWidget):
         transport.addWidget(self.stop_btn)
         transport.addWidget(self.seek, 1)
         transport.addWidget(self.time_label)
-        root.addLayout(transport)
+        self.transport_widget.setVisible(False)   # aparece após separar um arquivo
+        root.addWidget(self.transport_widget)
 
         # timer para atualizar posição/tempo
         self._timer = QTimer(self)
         self._timer.setInterval(200)
         self._timer.timeout.connect(self._tick)
+
+    # ---- painel avançado --------------------------------------------------
+    def _build_advanced_panel(self) -> QWidget:
+        self.adv_panel = QWidget()
+        self.adv_panel.setObjectName("advPanel")
+        grid = QGridLayout(self.adv_panel)
+        grid.setContentsMargins(16, 2, 8, 6)
+
+        self.model_box = QComboBox()
+        self.model_box.addItems([DEFAULT_MODEL, "htdemucs_6s"])
+        grid.addWidget(QLabel("Modelo (arquivo):"), 0, 0)
+        grid.addWidget(self.model_box, 0, 1)
+
+        self.live_model_box = QComboBox()
+        self.live_model_box.addItems(LIVE_MODELS.keys())
+        self.live_model_box.setToolTip(
+            "Rápido (4 stems): bateria/baixo/vocal/outros.\n"
+            "Guitarra (6 stems): adiciona guitarra e piano — permite mutar\n"
+            "especificamente a guitarra gravada da faixa (um pouco mais lento)."
+        )
+        grid.addWidget(QLabel("Modelo (ao vivo):"), 1, 0)
+        grid.addWidget(self.live_model_box, 1, 1)
+
+        self.latency_box = QComboBox()
+        self.latency_box.addItems(LIVE_WINDOW_OPTIONS.keys())
+        self.latency_box.setToolTip(
+            "Atraso do áudio ao vivo = tamanho da janela do Demucs (não é o\n"
+            "processamento). Menor = mais responsivo; maior = melhor separação."
+        )
+        for i, (lbl, sec) in enumerate(LIVE_WINDOW_OPTIONS.items()):
+            if sec == LIVE_WINDOW_SEC:
+                self.latency_box.setCurrentIndex(i)
+        grid.addWidget(QLabel("Latência (ao vivo):"), 2, 0)
+        grid.addWidget(self.latency_box, 2, 1)
+
+        self.isolate_chk = QCheckBox("Isolar por app (recomendado)")
+        self.isolate_chk.setChecked(True)
+        self.isolate_chk.setToolTip(
+            "Ligado: processa só o App escolhido; guitarra ao vivo e demais apps\n"
+            "seguem intactos. Desligado: captura o Monitor abaixo (pode ter eco)."
+        )
+        self.isolate_chk.toggled.connect(self._on_isolate_toggled)
+        grid.addWidget(self.isolate_chk, 3, 0, 1, 2)
+
+        self.monitor_box = QComboBox()
+        self._populate_monitors()
+        grid.addWidget(QLabel("Monitor (sem isolar):"), 4, 0)
+        grid.addWidget(self.monitor_box, 4, 1)
+
+        grid.setColumnStretch(1, 1)
+        self.adv_panel.setVisible(False)
+        self._on_isolate_toggled(True)   # monitor desabilitado por padrão
+        return self.adv_panel
 
     # ---- fonte ------------------------------------------------------------
     def _browse(self) -> None:
@@ -290,7 +358,7 @@ class MainWindow(QWidget):
     def _start_separation(self) -> None:
         source = self.source_input.text().strip()
         if not source:
-            QMessageBox.warning(self, "BandBox", "Informe um arquivo ou URL.")
+            QMessageBox.warning(self, "BandFOSS", "Informe um arquivo ou URL.")
             return
         if self.engine:                       # sai do modo ao vivo primeiro
             self.live_btn.setChecked(False)
@@ -336,12 +404,14 @@ class MainWindow(QWidget):
         self.mixer = StemMixer(stems, samplerate=samplerate)
         self._target = self.mixer
         for name in order_stems(self.mixer.names):
-            strip = StemStrip(name, self._set_gain, self._set_mute, self._set_solo)
+            strip = StemStrip(name, self._set_gain, self._set_mute, self._set_solo,
+                              color=STEM_COLORS.get(name, theme.AMBER))
             self.strips[name] = strip
             self.strip_row.addWidget(strip)
 
         self.play_btn.setEnabled(True)
         self.stop_btn.setEnabled(True)
+        self.transport_widget.setVisible(True)     # transporte só no modo arquivo
         self.preset_box.setEnabled(True)
         self.preset_box.setCurrentText("Original")
         self._timer.start()
@@ -412,12 +482,13 @@ class MainWindow(QWidget):
         self.app_box.setCurrentIndex(browser_idx)
 
     def _on_isolate_toggled(self, on: bool) -> None:
-        # modo isolado -> escolhe app; modo avançado -> escolhe monitor
-        self.app_box.setVisible(on)
-        self.refresh_btn.setVisible(on)
-        self.monitor_box.setVisible(not on)
-        if on:
-            self._populate_apps()
+        # isolado -> usa o App (linha principal); sem isolar -> usa o Monitor
+        self.app_box.setEnabled(on)
+        self.monitor_box.setEnabled(not on)
+
+    def _toggle_advanced(self, on: bool) -> None:
+        self.adv_panel.setVisible(on)
+        self.adv_btn.setText(("▾ " if on else "▸ ") + "AVANÇADO")
 
     def _toggle_live(self, on: bool) -> None:
         if on:
@@ -430,8 +501,7 @@ class MainWindow(QWidget):
         if self.mixer:
             self.mixer.stop()
         self.separate_btn.setEnabled(False)
-        self.play_btn.setEnabled(False)
-        self.stop_btn.setEnabled(False)
+        self.transport_widget.setVisible(False)    # sem transporte ao vivo
         self.live_btn.setText("Carregando…")
         self.live_btn.setEnabled(False)
         self.live_model_box.setEnabled(False)
@@ -447,7 +517,7 @@ class MainWindow(QWidget):
     def _on_live_failed(self, msg: str) -> None:
         self.live_status.setText("")
         self.live_btn.setEnabled(True)
-        self.live_btn.setText("🔴 Capturar ao vivo")
+        self.live_btn.setText("● Capturar ao vivo")
         self.live_btn.setChecked(False)
         self.live_model_box.setEnabled(True)
         self.latency_box.setEnabled(True)
@@ -488,7 +558,8 @@ class MainWindow(QWidget):
             # monta os faders (voz primeiro, "outros" por último)
             self._clear_strips()
             for name in order_stems(self.engine.names):
-                strip = StemStrip(name, self._set_gain, self._set_mute, self._set_solo)
+                strip = StemStrip(name, self._set_gain, self._set_mute, self._set_solo,
+                              color=STEM_COLORS.get(name, theme.AMBER))
                 self.strips[name] = strip
                 self.strip_row.addWidget(strip)
             self.preset_box.setEnabled(True)
@@ -527,12 +598,13 @@ class MainWindow(QWidget):
             self._target = None
         self._clear_strips()
         self.preset_box.setEnabled(False)
-        self.live_btn.setText("🔴 Capturar ao vivo")
+        self.live_btn.setText("● Capturar ao vivo")
         self.live_btn.setChecked(False)
         self.live_model_box.setEnabled(True)
         self.latency_box.setEnabled(True)
         self.live_status.setText("")
         self.separate_btn.setEnabled(True)
+        self.transport_widget.setVisible(bool(self.mixer))   # volta se há arquivo
 
     # ---- transporte -------------------------------------------------------
     def _toggle_play(self) -> None:

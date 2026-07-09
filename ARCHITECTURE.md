@@ -1,4 +1,4 @@
-# BandBox Desktop (open source) — Arquitetura
+# BandFOSS (open source) — Arquitetura
 
 Separação de faixas (stems) no desktop Linux, inspirado no **JBL BandBox STEM AI**,
 usando ferramentas open source. Isola/muta vocais, bateria, baixo, guitarra, etc. de
@@ -9,13 +9,13 @@ uma música — para tocar junto, fazer karaokê ou praticar.
 
 ## Objetivo
 
-Reproduzir a experiência do STEM AL do BandBox no desktop:
+Reproduzir a experiência do STEM AI do JBL BandBox no desktop:
 
 - Pega uma música (arquivo local, URL do YouTube Music, ou o áudio do sistema ao vivo).
 - Separa em stems: **vocals / drums / bass / other** (4-stem) ou
   **+ guitar / piano** (6-stem, modelo `htdemucs_6s`).
 - Mixer com fader + mute/solo por stem, em tempo real, enquanto toca.
-- Presets estilo BandBox: *Karaokê* (muta vocal), *Baterista* (muta drums), etc.
+- Presets estilo JBL BandBox: *Karaokê* (muta vocal), *Baterista* (muta drums), etc.
 
 ## Visão geral
 
@@ -62,9 +62,9 @@ opcionais, nunca como dependência central.
 - Faders verticais + mute/solo por stem, controles de transporte, presets.
 - A separação roda numa `QThread` para não travar a interface.
 
-## Modos (espelhando o BandBox)
+## Modos (espelhando o JBL BandBox)
 
-| Modo BandBox | Aqui | Latência |
+| Modo JBL BandBox | Aqui | Latência |
 |---|---|---|
 | Multi-stem separation (~2 s) | Fase 2 — janela deslizante ao vivo | ~1–3 s |
 | Karaoke (~500 ms) | Fase 2 — modelo mais leve / hop menor | alvo <1 s |
@@ -76,7 +76,7 @@ opcionais, nunca como dependência central.
 bandbox/
 ├── pyproject.toml
 ├── ARCHITECTURE.md              # este arquivo
-├── bandbox/
+├── bandfoss/
 │   ├── config.py                # sample rate, modelo, nomes dos stems, presets
 │   ├── capture/
 │   │   ├── file_source.py       # arquivo local / URL (yt-dlp) → PCM  [Fase 1]
@@ -107,7 +107,7 @@ bandbox/
   e a saída não é recapturada. Ao encerrar, o sink padrão e os streams são restaurados.
 
   ```
-  app (Spotify) ─► [sink virtual bandbox_capture] ─► monitor ─► captura
+  app (Spotify) ─► [sink virtual bandfoss_capture] ─► monitor ─► captura
                         (sem alto-falante)                          │
                                                                     ▼
                                               Demucs + mix + overlap-add
@@ -134,7 +134,7 @@ também atenua os artefatos de borda do Demucs.
 **Latência vs. responsividade dos controles (dois atrasos distintos):**
 
 - *Latência do áudio* ≈ tamanho da janela `W` (a janela precisa encher antes da 1ª
-  separação). NÃO é o tempo de GPU (~300 ms). Por isso é ajustável na UF (1/2/3 s):
+  separação). NÃO é o tempo de GPU (~300 ms). Por isso é ajustável na UI (1/2/3 s):
   janela menor = menos atraso, separação um pouco pior. A GPU tem folga de sobra.
 - *Responsividade dos controles* — os stems separados vão para o ring **sem ganho**;
   o mix por fader/mute/solo é aplicado **na saída, por bloco (~23 ms)**. Assim mexer

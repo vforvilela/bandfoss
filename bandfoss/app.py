@@ -1,4 +1,4 @@
-"""Entry point do BandBox."""
+"""Entry point do BandFOSS."""
 
 from __future__ import annotations
 

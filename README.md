@@ -1,4 +1,4 @@
-# BandBox Desktop
+# BandFOSS
 
 Separação de faixas (stems) no desktop Linux, inspirado no **JBL BandBox STEM AI**,
 100% open source. Isola/muta vocais, bateria, baixo, guitarra etc. de uma música —
@@ -27,7 +27,7 @@ pip install -e ".[download]"
 ### App gráfico
 
 ```bash
-bandbox            # ou: python -m bandbox
+bandfoss            # ou: python -m bandfoss
 ```
 
 **Modo offline (arquivo/URL):**
@@ -39,24 +39,21 @@ bandbox            # ou: python -m bandbox
    e dê **Play**.
 
 **Modo ao vivo (Fase 2):**
-1. Toque algo em qualquer app (Spotify, navegador…).
-2. Deixe **Isolar áudio** marcado (recomendado) e clique **🔴 Capturar ao vivo**.
-   - Isso cria um sink virtual: o app original fica mudo nos alto-falantes e só o
-     áudio **processado** toca. Evita ouvir os dois ao mesmo tempo e o loop de
-     realimentação. Ao parar, tudo é restaurado automaticamente.
-   - Sem isolar (modo avançado): captura o monitor escolhido e toca no default —
-     pode haver eco/mistura.
-3. Escolha o modelo ao vivo:
-   - **Rápido · 4 stems** — bateria/baixo/vocal/outros.
-   - **Guitarra · 6 stems** (`htdemucs_6s`) — adiciona guitarra e piano, permitindo
-     mutar especificamente a guitarra gravada da faixa (ex.: preset
-     *Guitarrista (sem guitarra)*) para tocar por cima. Um pouco mais lento.
-4. Mexa nos faders/presets em tempo real. Latência ≈ 4 s (tamanho da janela do
-   Demucs; ajustável em `config.py`).
+1. Toque algo em qualquer app (Spotify, Chrome…).
+2. Em **App:** escolha o app (a lista se atualiza ao abrir) e clique
+   **🔴 Capturar ao vivo**. Só aquele app é processado — sua guitarra ao vivo e o
+   resto seguem tocando normalmente. Ao parar, tudo é restaurado.
+3. Mexa nos faders/presets em tempo real.
 
-> **Tocar guitarra junto:** deixe o Chrome como app capturado, escolha
-> *Guitarra · 6 stems*, aplique o preset *Guitarrista (sem guitarra)* — a guitarra
-> gravada some da música e sua guitarra ao vivo (não capturada) toca por cima.
+**Avançado** (recolhido por padrão) expõe:
+- **Modelo (ao vivo):** *Rápido · 4 stems* ou *Guitarra · 6 stems* (`htdemucs_6s`,
+  adiciona guitarra/piano — permite mutar a guitarra gravada da faixa).
+- **Latência:** Baixa ~1s / Média ~2s / Alta ~3s (tamanho da janela do Demucs).
+- **Modelo (arquivo)** e o modo **Monitor** (captura sem isolar por app).
+
+> **Tocar guitarra junto:** em Avançado escolha *Guitarra · 6 stems*; capture o
+> Chrome e aplique o preset *Guitarrista (sem guitarra)* — a guitarra gravada some
+> da música e sua guitarra ao vivo (não capturada) toca por cima.
 
 ### Teste headless (sem GUI)
 

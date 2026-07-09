@@ -1,4 +1,4 @@
-"""Configuração central do BandBox."""
+"""Configuração central do BandFOSS."""
 
 from __future__ import annotations
 
@@ -9,7 +9,7 @@ BLOCK_SIZE = 1024            # frames por callback do sounddevice (~23 ms)
 
 # Modelos Demucs -------------------------------------------------------------
 # htdemucs_ft -> 4 stems (drums, bass, other, vocals)  [melhor qualidade 4-stem]
-# htdemucs_6s -> 6 stems (+ guitar, piano)             [espelha o BandBox]
+# htdemucs_6s -> 6 stems (+ guitar, piano)             [espelha o JBL BandBox]
 MODEL_4STEM = "htdemucs_ft"
 MODEL_6STEM = "htdemucs_6s"
 DEFAULT_MODEL = MODEL_4STEM
@@ -48,6 +48,16 @@ def order_stems(names):
     return known + rest
 
 
+# Cor de cada canal (code de cor tipo mixer). Hues distintos, legíveis no escuro.
+STEM_COLORS = {
+    "vocals": "#4CC2C4",   # teal — voz
+    "drums": "#E5484D",    # vermelho — bateria
+    "bass": "#7C5CFF",     # violeta — baixo
+    "other": "#F2A93B",    # âmbar — outros
+    "guitar": "#6FCF57",   # verde — guitarra
+    "piano": "#C77DFF",    # lilás — piano
+}
+
 # Nomes dos stems por modelo (a ordem real vem do próprio modelo em runtime).
 STEM_LABELS = {
     "drums": "Bateria",
@@ -58,7 +68,7 @@ STEM_LABELS = {
     "piano": "Piano",
 }
 
-# Presets estilo BandBox: stems a serem MUTADOS ao ativar o preset.
+# Presets estilo JBL BandBox: stems a serem MUTADOS ao ativar o preset.
 PRESETS = {
     "Original": [],
     "Karaokê (sem vocal)": ["vocals"],

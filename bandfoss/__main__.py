@@ -1,4 +1,4 @@
-"""Permite `python -m bandbox`."""
+"""Permite `python -m bandfoss`."""
 
 import sys
 

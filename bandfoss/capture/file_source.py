@@ -107,7 +107,7 @@ def load_source(source: str, status: StatusCb = None) -> np.ndarray:
     `status` recebe mensagens curtas de progresso ("Baixando…", "Convertendo…").
     """
     source = source.strip()
-    with tempfile.TemporaryDirectory(prefix="bandbox_") as tmp:
+    with tempfile.TemporaryDirectory(prefix="bandfoss_") as tmp:
         tmp_dir = Path(tmp)
 
         local = Path(source).expanduser()
