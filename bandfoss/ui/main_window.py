@@ -30,14 +30,14 @@ from PySide6.QtWidgets import (
 
 from ..config import (
     LIVE_MODELS,
-    LIVE_WINDOW_OPTIONS,
     LIVE_WINDOW_SEC,
+    LIVE_WINDOWS,
     PRESETS,
     SAMPLE_RATE,
     STEM_COLORS,
-    STEM_LABELS,
     order_stems,
 )
+from ..i18n import t
 from . import theme
 
 
@@ -116,7 +116,7 @@ class StemStrip(QWidget):
         btn_row.addWidget(self.mute_btn)
         btn_row.addWidget(self.solo_btn)
 
-        title = QLabel(STEM_LABELS.get(name, name.capitalize()).upper())
+        title = QLabel(t(f"stem_{name}").upper())
         title.setAlignment(Qt.AlignHCenter)
         title.setStyleSheet(f"color: {color}; font-weight: 800; letter-spacing: 1px;")
 
@@ -139,7 +139,7 @@ class StemStrip(QWidget):
 class MainWindow(QWidget):
     def __init__(self):
         super().__init__()
-        self.setWindowTitle("BandFOSS — Mixer de Stems ao vivo")
+        self.setWindowTitle(t("window_title"))
         self.resize(720, 520)
         self.setStyleSheet(theme.STYLESHEET)
 
@@ -166,7 +166,7 @@ class MainWindow(QWidget):
         wf.setWeight(QFont.Black)
         wf.setLetterSpacing(QFont.PercentageSpacing, 118)
         wordmark.setFont(wf)
-        subtitle = QLabel("STEM MIXER")
+        subtitle = QLabel(t("subtitle"))
         subtitle.setObjectName("subtitle")
         sf = QFont()
         sf.setPointSize(9)
@@ -181,14 +181,14 @@ class MainWindow(QWidget):
 
         # --- ao vivo: App -> Capturar ---
         live_row = QHBoxLayout()
-        live_row.addWidget(QLabel("App:"))
+        live_row.addWidget(QLabel(t("app_label")))
         self.app_box = AppComboBox(self._populate_apps)
         self.app_box.setMinimumWidth(240)
         self.app_box.setEditable(True)          # dá para digitar um app que ainda não toca
         self.app_box.setInsertPolicy(QComboBox.NoInsert)
-        self.app_box.lineEdit().setPlaceholderText("ex.: Chrome")
+        self.app_box.lineEdit().setPlaceholderText(t("app_placeholder"))
         self._populate_apps()
-        self.live_btn = QPushButton("● Capturar ao vivo")
+        self.live_btn = QPushButton(t("capture_start"))
         self.live_btn.setObjectName("recordBtn")
         self.live_btn.setCheckable(True)
         self.live_btn.toggled.connect(self._toggle_live)
@@ -199,7 +199,7 @@ class MainWindow(QWidget):
         root.addLayout(live_row)
 
         # --- Avançado (recolhido): modelo, latência, modo monitor ---
-        self.adv_btn = QPushButton("▸ AVANÇADO")
+        self.adv_btn = QPushButton("▸ " + t("advanced"))
         self.adv_btn.setObjectName("advBtn")
         self.adv_btn.setCheckable(True)
         self.adv_btn.toggled.connect(self._toggle_advanced)
@@ -218,10 +218,11 @@ class MainWindow(QWidget):
 
         # --- presets ---
         preset_row = QHBoxLayout()
-        preset_row.addWidget(QLabel("Preset:"))
+        preset_row.addWidget(QLabel(t("preset_label")))
         self.preset_box = QComboBox()
-        self.preset_box.addItems(PRESETS.keys())
-        self.preset_box.currentTextChanged.connect(self._apply_preset)
+        for pid in PRESETS:
+            self.preset_box.addItem(t(f"preset_{pid}"), userData=pid)
+        self.preset_box.currentIndexChanged.connect(self._apply_preset)
         self.preset_box.setEnabled(False)
         preset_row.addWidget(self.preset_box)
         preset_row.addStretch(1)
@@ -229,7 +230,7 @@ class MainWindow(QWidget):
 
         # --- footer: crédito + link ---
         footer = QLabel(
-            f"<span style='color:{theme.MUTED}'>BandFOSS · software livre · feito por </span>"
+            f"<span style='color:{theme.MUTED}'>{t('footer_prefix')}</span>"
             f"<a href='https://github.com/vforvilela' "
             f"style='color:{theme.AMBER}; text-decoration:none'>vforvilela</a>"
         )
@@ -243,10 +244,8 @@ class MainWindow(QWidget):
         if platform.system() != "Linux":
             self.app_box.setEnabled(False)
             self.live_btn.setEnabled(False)
-            self.live_btn.setToolTip(
-                "BandFOSS captura ao vivo via PipeWire, disponível apenas no Linux."
-            )
-            self.live_status.setText("requer Linux (PipeWire)")
+            self.live_btn.setToolTip(t("linux_only_tip"))
+            self.live_status.setText(t("requires_linux"))
 
     # ---- painel avançado --------------------------------------------------
     def _build_advanced_panel(self) -> QWidget:
@@ -256,39 +255,30 @@ class MainWindow(QWidget):
         grid.setContentsMargins(16, 2, 8, 6)
 
         self.live_model_box = QComboBox()
-        self.live_model_box.addItems(LIVE_MODELS.keys())
-        self.live_model_box.setToolTip(
-            "Rápido (4 stems): bateria/baixo/vocal/outros.\n"
-            "Guitarra (6 stems): adiciona guitarra e piano — permite mutar\n"
-            "especificamente a guitarra gravada da faixa (um pouco mais lento)."
-        )
-        grid.addWidget(QLabel("Modelo:"), 0, 0)
+        for mid in LIVE_MODELS:
+            self.live_model_box.addItem(t(f"model_{mid}"), userData=mid)
+        self.live_model_box.setToolTip(t("model_tip"))
+        grid.addWidget(QLabel(t("model_label")), 0, 0)
         grid.addWidget(self.live_model_box, 0, 1)
 
         self.latency_box = QComboBox()
-        self.latency_box.addItems(LIVE_WINDOW_OPTIONS.keys())
-        self.latency_box.setToolTip(
-            "Atraso do áudio ao vivo = tamanho da janela do Demucs (não é o\n"
-            "processamento). Menor = mais responsivo; maior = melhor separação."
-        )
-        for i, (lbl, sec) in enumerate(LIVE_WINDOW_OPTIONS.items()):
+        for i, (wid, sec) in enumerate(LIVE_WINDOWS.items()):
+            self.latency_box.addItem(t(f"latency_{wid}"), userData=sec)
             if sec == LIVE_WINDOW_SEC:
                 self.latency_box.setCurrentIndex(i)
-        grid.addWidget(QLabel("Latência:"), 1, 0)
+        self.latency_box.setToolTip(t("latency_tip"))
+        grid.addWidget(QLabel(t("latency_label")), 1, 0)
         grid.addWidget(self.latency_box, 1, 1)
 
-        self.isolate_chk = QCheckBox("Isolar por app (recomendado)")
+        self.isolate_chk = QCheckBox(t("isolate"))
         self.isolate_chk.setChecked(True)
-        self.isolate_chk.setToolTip(
-            "Ligado: processa só o App escolhido; guitarra ao vivo e demais apps\n"
-            "seguem intactos. Desligado: captura o Monitor abaixo (pode ter eco)."
-        )
+        self.isolate_chk.setToolTip(t("isolate_tip"))
         self.isolate_chk.toggled.connect(self._on_isolate_toggled)
         grid.addWidget(self.isolate_chk, 2, 0, 1, 2)
 
         self.monitor_box = QComboBox()
         self._populate_monitors()
-        grid.addWidget(QLabel("Monitor (sem isolar):"), 3, 0)
+        grid.addWidget(QLabel(t("monitor_label")), 3, 0)
         grid.addWidget(self.monitor_box, 3, 1)
 
         grid.setColumnStretch(1, 1)
@@ -298,7 +288,7 @@ class MainWindow(QWidget):
 
     def _toggle_advanced(self, on: bool) -> None:
         self.adv_panel.setVisible(on)
-        self.adv_btn.setText(("▾ " if on else "▸ ") + "AVANÇADO")
+        self.adv_btn.setText(("▾ " if on else "▸ ") + t("advanced"))
 
     # ---- fontes de captura ------------------------------------------------
     def _populate_monitors(self) -> None:
@@ -347,13 +337,13 @@ class MainWindow(QWidget):
             self._stop_live()
 
     def _start_live(self) -> None:
-        self.live_btn.setText("Carregando…")
+        self.live_btn.setText(t("loading"))
         self.live_btn.setEnabled(False)
         self.live_model_box.setEnabled(False)
         self.latency_box.setEnabled(False)
-        self.live_status.setText("Carregando modelo ao vivo…")
+        self.live_status.setText(t("loading_model"))
 
-        model_name = LIVE_MODELS[self.live_model_box.currentText()]
+        model_name = LIVE_MODELS[self.live_model_box.currentData()]
         self.live_worker = LiveModelWorker(model_name)
         self.live_worker.ready.connect(self._on_live_ready)
         self.live_worker.failed.connect(self._on_live_failed)
@@ -362,11 +352,11 @@ class MainWindow(QWidget):
     def _on_live_failed(self, msg: str) -> None:
         self.live_status.setText("")
         self.live_btn.setEnabled(True)
-        self.live_btn.setText("● Capturar ao vivo")
+        self.live_btn.setText(t("capture_start"))
         self.live_btn.setChecked(False)
         self.live_model_box.setEnabled(True)
         self.latency_box.setEnabled(True)
-        QMessageBox.critical(self, "Falha na captura ao vivo", msg)
+        QMessageBox.critical(self, t("err_capture_title"), msg)
 
     def _on_live_ready(self, separator) -> None:  # noqa: ANN001
         from ..capture.live_source import LiveCapture
@@ -381,7 +371,7 @@ class MainWindow(QWidget):
                     app_match = re.sub(r"\s*\(#\d+\)\s*$", "",
                                        self.app_box.currentText()).strip()
                 if not app_match:
-                    raise RuntimeError("Informe o app a capturar (ex.: Chrome).")
+                    raise RuntimeError(t("err_no_app"))
                 self.router = PipeWireRouter()
                 device, output_sink = self.router.setup(app_match)
             else:
@@ -390,7 +380,7 @@ class MainWindow(QWidget):
                     device = None
 
             self.capture = LiveCapture(device=device)
-            window_sec = LIVE_WINDOW_OPTIONS[self.latency_box.currentText()]
+            window_sec = self.latency_box.currentData()
             window_frames = int(window_sec * SAMPLE_RATE)
             self.engine = LiveEngine(
                 separator, self.capture, window_frames=window_frames,
@@ -407,7 +397,7 @@ class MainWindow(QWidget):
                 self.strip_row.addWidget(strip)
             self._update_strip_states()
             self.preset_box.setEnabled(True)
-            self.preset_box.setCurrentText("Original")
+            self.preset_box.setCurrentIndex(0)   # "original"
 
             self.capture.start()
             self.engine.start()
@@ -419,14 +409,13 @@ class MainWindow(QWidget):
             return
 
         self.live_btn.setEnabled(True)
-        self.live_btn.setText("■ Parar ao vivo")
+        self.live_btn.setText(t("capture_stop"))
         if self.isolate_chk.isChecked():
-            src = f"só {self.app_box.currentData() or self.app_box.currentText()}"
+            app = self.app_box.currentData() or self.app_box.currentText()
+            src = t("src_only", app=app)
         else:
-            src = "monitor"
-        self.live_status.setText(
-            f"● ao vivo · {src} (latência ~{self.engine.latency_seconds:.1f}s)"
-        )
+            src = t("src_monitor")
+        self.live_status.setText(t("status_live", src=src, sec=self.engine.latency_seconds))
 
     def _stop_live(self) -> None:
         if self.engine:
@@ -441,7 +430,7 @@ class MainWindow(QWidget):
         self._target = None
         self._clear_strips()
         self.preset_box.setEnabled(False)
-        self.live_btn.setText("● Capturar ao vivo")
+        self.live_btn.setText(t("capture_start"))
         self.live_btn.setChecked(False)
         self.live_model_box.setEnabled(True)
         self.latency_box.setEnabled(True)
@@ -474,10 +463,11 @@ class MainWindow(QWidget):
             self._target.set_solo(None)
         self._update_strip_states()
 
-    def _apply_preset(self, preset: str) -> None:
+    def _apply_preset(self, *_args) -> None:
         if not self._target:
             return
-        mute_set = set(PRESETS.get(preset, []))
+        pid = self.preset_box.currentData()
+        mute_set = set(PRESETS.get(pid, []))
         for name, strip in self.strips.items():
             strip.mute_btn.setChecked(name in mute_set)
         self._update_strip_states()

@@ -1,41 +1,50 @@
 # BandFOSS
 
-**Separe e remixe, em tempo real, o áudio que está tocando no seu computador.**
-Isole ou silencie vocal, bateria, baixo, guitarra e mais — para cantar karaokê, tirar
-músicas de ouvido ou **tocar junto** com a sua banda. Software livre, para desktop.
+**Real-time stem separation for *any* audio playing on your computer.**
 
-Inspirado no **JBL BandBox** (STEM AI), porém aberto e para computador.
+Point BandFOSS at whatever is streaming — Spotify, YouTube, Apple Music, a browser
+tab, a game, a video call — and it splits the sound into **vocals, drums, bass,
+guitar, keys and more, live**, so you can mute or solo any part on the fly. No files,
+no uploads, no waiting: it separates the stream **as it plays**.
 
-Feito por [vforvilela](https://github.com/vforvilela).
+Karaoke any song the instant it starts. Drop the drums and play along. Solo the bass to
+learn a line. It's the open-source, desktop take on the **JBL BandBox** (STEM AI).
 
----
-
-## O que dá pra fazer
-
-Toque uma música em **qualquer app** (Chrome, Spotify…) e o BandFOSS captura, separa
-em faixas e deixa você mixar ao vivo:
-
-- 🎤 **Karaokê** — tira o vocal.
-- 🥁 **Tocar junto** — silencia a bateria (ou baixo, ou guitarra) e você toca por cima.
-- 🎧 **Estudar de ouvido** — deixa só o instrumento que você quer escutar.
-
-Só o app escolhido é processado — **sua guitarra ao vivo e todo o resto continuam
-tocando normais** nas caixas.
-
-> **Plataforma:** a captura ao vivo usa o **PipeWire**, então o BandFOSS roda no
-> **Linux**. Precisa de uma **GPU NVIDIA** para separar em tempo real com folga
-> (funciona em CPU, porém com mais atraso).
+Made by [vforvilela](https://github.com/vforvilela).
 
 ---
 
-## Instalação (Linux)
+## Why it's different
+
+- **Any source, in real time.** It doesn't need the audio file — it taps the live
+  audio stream from any app and separates it on the fly, with ~1–3 s of latency.
+- **Only what you choose.** Pick one app (e.g. Chrome) and only that is captured and
+  processed — your live instrument and everything else keep playing untouched.
+- **Play or sing over it.** Mute the stem of your instrument (drums, bass, guitar,
+  keys… or vocals) and jam along with the rest of the track.
+
+---
+
+## What you can do
+
+- 🎤 **Karaoke** — drop the vocals from any live stream.
+- 🥁 **Play along** — mute drums (or bass, or guitar) and play over the track.
+- 🎧 **Learn by ear** — solo just the instrument you want to hear.
+
+> **Platform:** live capture uses **PipeWire**, so BandFOSS runs on **Linux**. An
+> **NVIDIA GPU** keeps up in real time comfortably (it also runs on CPU, with more
+> delay).
+
+---
+
+## Install (Linux)
 
 ```bash
-# dependências do sistema (Debian/Ubuntu; use o gerenciador da sua distro)
+# system deps (Debian/Ubuntu — use your distro's package manager)
 sudo apt install python3-venv ffmpeg pipewire-pulse
-sudo apt install libxcb-cursor0     # lib do Qt, se faltar
+sudo apt install libxcb-cursor0     # Qt lib, if missing
 
-# o BandFOSS
+# BandFOSS
 git clone https://github.com/vforvilela/bandfoss.git
 cd bandfoss
 python3 -m venv .venv && source .venv/bin/activate
@@ -44,54 +53,60 @@ pip install -e .
 
 ---
 
-## Como usar
+## Usage
 
 ```bash
 bandfoss
 ```
 
-1. Comece a tocar a música no **Chrome** (ou outro app).
-2. Em **App**, escolha/digite o programa (ex.: `Chrome`) e clique
-   **● Capturar ao vivo**.
-   - Pode clicar **antes** de dar play: quando o app começar a tocar, o BandFOSS
-     pega o áudio sozinho.
-3. Mexa nos **faders**, use **M** (mudo) / **S** (solo) ou um **Preset** (Karaokê,
-   sem bateria…).
+1. Start playing music in **Chrome** (or any app).
+2. In **Source**, pick/type the app (e.g. `Chrome`) and click **● Capture live**.
+   - You can click **before** hitting play: as soon as the app starts, BandFOSS grabs
+     its audio automatically.
+3. Move the **faders**, use **M** (mute) / **S** (solo), or pick a **Preset**
+   (Karaoke, no drums…). Muted/soloed channels dim so you can see what's audible at a
+   glance.
 
-Ao parar, seu áudio volta ao normal.
+Stop anytime and your audio returns to normal.
 
-### 🎶 Tocar junto — qualquer instrumento
+### 🎶 Play along — any instrument
 
-Silencie a faixa do **seu** instrumento e toque/cante por cima. Escolha o preset
-correspondente (ou aperte **M** na faixa):
+Mute **your** instrument's stem and play/sing over it: Karaoke (no vocals), Drummer
+(no drums), Bassist (no bass), Guitarist / Keys.
 
-- **Karaokê** → sem vocal (você canta)
-- **Baterista** → sem bateria
-- **Baixista** → sem baixo
-- **Guitarrista** / **Tecladista** → sem guitarra / sem piano
-
-> Para separar **guitarra** e **piano** individualmente, abra **Avançado** e escolha o
-> modelo **Guitarra · 6 stems** (o rápido, de 4 stems, tem bateria/baixo/vocal/outros —
-> guitarra e teclado ficam juntos em "outros"). Em **Avançado** também está a
-> **Latência** (menor = mais responsivo).
+> To split **guitar** and **piano** separately, open **Advanced** and choose the
+> **Guitar · 6 stems** model (the fast 4-stem one keeps guitar and keys inside
+> "Other"). **Advanced** also has **Latency** — smaller is more responsive, larger is
+> cleaner.
 
 ---
 
-## Dúvidas comuns
+## Language
 
-- **"Could not load the Qt platform plugin xcb":** instale `libxcb-cursor0`.
-- **Tem uns segundos de atraso ao vivo:** é normal — a IA precisa de uma janela de
-  áudio para separar. Reduza em **Avançado → Latência**.
-- **Está lento:** você está na CPU. Uma GPU NVIDIA resolve; ou baixe a latência.
-- **Não aparece o app na lista:** clique no campo **App** para reabrir a lista (ela se
-  atualiza), ou digite o nome do app manualmente.
+The interface is **English by default**. To switch to Portuguese:
+
+```bash
+BANDFOSS_LANG=pt bandfoss
+```
 
 ---
 
-## Créditos & licença
+## FAQ
 
-Software livre, feito por **[vforvilela](https://github.com/vforvilela)**.
+- **"Could not load the Qt platform plugin xcb":** install `libxcb-cursor0`.
+- **A couple seconds of delay live:** expected — the AI needs a window of audio to
+  separate. Lower it in **Advanced → Latency**.
+- **It's slow:** you're on CPU. An NVIDIA GPU fixes it; or lower the latency.
+- **Keys/piano sound rough:** piano is the weakest stem of the underlying model. Try
+  the **Max latency** window, or in some songs muting **"Other"** (4-stem) removes keys
+  more cleanly.
 
-Motor de separação: [Demucs](https://github.com/facebookresearch/demucs) (Meta).
-Inspirado no JBL BandBox — este projeto **não** é afiliado à JBL/Harman.
-Respeite os termos de uso dos serviços de streaming.
+---
+
+## Credits & license
+
+Free software, made by **[vforvilela](https://github.com/vforvilela)**.
+
+Separation engine: [Demucs](https://github.com/facebookresearch/demucs) (Meta).
+Inspired by the JBL BandBox — this project is **not** affiliated with JBL/Harman.
+Respect the terms of service of streaming platforms.

@@ -14,12 +14,11 @@ MODEL_4STEM = "htdemucs_ft"
 MODEL_6STEM = "htdemucs_6s"
 DEFAULT_MODEL = MODEL_4STEM
 
-# Modelos disponíveis na captura AO VIVO (rótulo -> nome do modelo Demucs).
-# "Rápido" separa 4 stems; "Guitarra" separa 6 stems (inclui guitarra/piano),
-# permitindo mutar especificamente a guitarra gravada da faixa.
+# Modelos disponíveis na captura AO VIVO (id -> nome do modelo Demucs).
+# O rótulo exibido vem do i18n (model_<id>). "fast4" = 4 stems; "guitar6" = 6 stems.
 LIVE_MODELS = {
-    "Rápido · 4 stems": "htdemucs",
-    "Guitarra · 6 stems": "htdemucs_6s",
+    "fast4": "htdemucs",
+    "guitar6": "htdemucs_6s",
 }
 LIVE_MODEL = "htdemucs"          # padrão
 
@@ -27,16 +26,15 @@ LIVE_MODEL = "htdemucs"          # padrão
 # Latência ≈ LIVE_WINDOW_SEC (NÃO é o tempo de processamento; é o algoritmo:
 # a janela precisa encher antes da 1ª separação). Overlap de 50% (hop = janela/2)
 # dá overlap-add perfeito com Hann. Janela menor = menos latência, menos qualidade.
-LIVE_WINDOW_SEC = 2.0            # padrão (antes 4.0)
+LIVE_WINDOW_SEC = 2.0            # padrão (id "medium")
 LIVE_HOP_SEC = 1.0
 
-# Opções de latência ao vivo expostas na UI (rótulo -> janela em segundos).
-# Janela maior = mais contexto = melhor separação (e mais atraso).
-LIVE_WINDOW_OPTIONS = {
-    "Baixa · ~1s": 1.0,
-    "Média · ~2s": 2.0,
-    "Alta · ~3s": 3.0,
-    "Máxima · ~6s (+qualidade)": 6.0,
+# Opções de latência ao vivo (id -> janela em segundos). Rótulo vem do i18n.
+LIVE_WINDOWS = {
+    "low": 1.0,
+    "medium": 2.0,
+    "high": 3.0,
+    "max": 6.0,
 }
 
 # "shifts" do Demucs no modo ao vivo: passadas com deslocamento aleatório, cuja
@@ -64,25 +62,15 @@ STEM_COLORS = {
     "piano": "#C77DFF",    # lilás — piano
 }
 
-# Nomes dos stems por modelo (a ordem real vem do próprio modelo em runtime).
-STEM_LABELS = {
-    "drums": "Bateria",
-    "bass": "Baixo",
-    "other": "Outros",
-    "vocals": "Vocal",
-    "guitar": "Guitarra",
-    "piano": "Piano",
-}
-
-# Presets: stems a serem MUTADOS ao ativar. Um por instrumento — toque/cante por cima.
-# (guitar/piano só existem no modelo de 6 stems; nos outros modelos são ignorados.)
+# Presets: id -> stems a serem MUTADOS ao ativar. Um por instrumento — toque/cante
+# por cima. Rótulo vem do i18n (preset_<id>). guitar/piano só existem no modelo 6s.
 PRESETS = {
-    "Original": [],
-    "Karaokê (sem vocal)": ["vocals"],
-    "Baterista (sem bateria)": ["drums"],
-    "Baixista (sem baixo)": ["bass"],
-    "Guitarrista (sem guitarra)": ["guitar"],
-    "Tecladista (sem piano)": ["piano"],
-    "Só vocal (a capella)": ["drums", "bass", "other", "guitar", "piano"],
-    "Instrumental": ["vocals"],
+    "original": [],
+    "karaoke": ["vocals"],
+    "no_drums": ["drums"],
+    "no_bass": ["bass"],
+    "no_guitar": ["guitar"],
+    "no_piano": ["piano"],
+    "acapella": ["drums", "bass", "other", "guitar", "piano"],
+    "instrumental": ["vocals"],
 }
