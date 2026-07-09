@@ -92,12 +92,44 @@ bandbox/
 
 ## Roadmap
 
-- **Fase 1 — MVP offline** *(em andamento)*
+- **Fase 1 — MVP offline** ✅
   arquivo/URL → Demucs → mixer com faders. Sincronia perfeita, qualidade máxima.
-- **Fase 2 — Tempo real** — captura PipeWire + separação em janela deslizante com
-  overlap-add; presets Karaokê/Multi-stem; latência ~1–3 s.
+- **Fase 2 — Tempo real** ✅
+  captura do monitor do PipeWire (`parec`) → janela deslizante (W=4s, hop=2s) →
+  Demucs `htdemucs` (fast) → overlap-add com Hann periódico (COLA exato) → saída.
+  Os mesmos faders/presets controlam o mix ao vivo. Latência ≈ tamanho da janela.
+  **Medido na RTX 4080 SUPER: 82 ms por janela de 4s → 24,5× de folga de tempo real.**
+
+  **Isolamento de áudio (evita mistura e realimentação):** um *sink virtual*
+  (`module-null-sink`) recebe o áudio do app (mudo nos alto-falantes); capturamos o
+  monitor DELE e tocamos o resultado processado **no alto-falante real** via `pacat`
+  (device explícito, não segue o default). Assim o original não vaza para os falantes
+  e a saída não é recapturada. Ao encerrar, o sink padrão e os streams são restaurados.
+
+  ```
+  app (Spotify) ─► [sink virtual bandbox_capture] ─► monitor ─► captura
+                        (sem alto-falante)                          │
+                                                                    ▼
+                                              Demucs + mix + overlap-add
+                                                                    │
+                                          pacat ─► [sink REAL] ─► alto-falante
+  ```
 - **Fase 3 — Polimento** — presets nomeados, export de stems, waveform, EQ por stem,
-  detecção de troca de faixa na captura ao vivo.
+  detecção de troca de faixa na captura ao vivo, janela/latência ajustável na UI.
+
+### Detalhe do overlap-add ao vivo
+
+```
+janela k (W frames) ──► Demucs (fast) ──► stems ──► mix por ganho ──► × Hann(W)
+                                                                          │
+         A = mixed[:W/2]   B = mixed[W/2:]                                │
+         out(k) = carry + A     (H frames finais)  ◄── carry = B(k-1) ────┘
+         carry ← B ; janela desliza H frames
+```
+
+Hann periódico (`0.5 - 0.5·cos(2πn/W)`) soma constante (COLA = 1) no hop de 50%,
+então a reconstrução é exata e sem *pumping* de amplitude entre janelas — a janela
+também atenua os artefatos de borda do Demucs.
 
 ## Riscos / decisões registradas
 

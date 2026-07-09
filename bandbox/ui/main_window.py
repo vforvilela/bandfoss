@@ -12,6 +12,7 @@ import numpy as np
 from PySide6.QtCore import Qt, QThread, QTimer, Signal
 from PySide6.QtWidgets import (
     QApplication,
+    QCheckBox,
     QComboBox,
     QFileDialog,
     QFrame,
@@ -26,7 +27,14 @@ from PySide6.QtWidgets import (
     QWidget,
 )
 
-from ..config import DEFAULT_MODEL, PRESETS, STEM_LABELS
+from ..config import (
+    DEFAULT_MODEL,
+    LIVE_MODEL,
+    LIVE_WINDOW_SEC,
+    PRESETS,
+    SAMPLE_RATE,
+    STEM_LABELS,
+)
 from ..engine.mixer import StemMixer
 
 
@@ -56,6 +64,20 @@ class SeparationWorker(QThread):
             stems = separator.separate(pcm, progress=self.progress.emit)
             self.finished_ok.emit(stems, separator.samplerate)
         except Exception as exc:  # noqa: BLE001 — reportamos à UI
+            self.failed.emit(str(exc))
+
+
+class LiveModelWorker(QThread):
+    """Carrega o modelo Demucs ao vivo (lento) fora da thread da UI."""
+
+    ready = Signal(object)   # Separator
+    failed = Signal(str)
+
+    def run(self) -> None:  # noqa: D401
+        try:
+            from ..engine.separator import Separator
+            self.ready.emit(Separator(LIVE_MODEL))
+        except Exception as exc:  # noqa: BLE001
             self.failed.emit(str(exc))
 
 
@@ -113,7 +135,12 @@ class MainWindow(QWidget):
         self.resize(680, 460)
 
         self.mixer: Optional[StemMixer] = None
+        self.engine = None                 # LiveEngine quando ao vivo
+        self.capture = None                # LiveCapture quando ao vivo
+        self.router = None                 # PipeWireRouter quando isolando
+        self.live_worker: Optional[LiveModelWorker] = None
         self.worker: Optional[SeparationWorker] = None
+        self._target = None                # objeto ativo p/ ganhos (mixer ou engine)
         self.strips: Dict[str, StemStrip] = {}
 
         root = QVBoxLayout(self)
@@ -141,6 +168,44 @@ class MainWindow(QWidget):
         self.progress.setRange(0, 100)
         self.progress.setVisible(False)
         root.addWidget(self.progress)
+
+        # --- captura ao vivo (Fase 2) ---
+        live_row = QHBoxLayout()
+        self.isolate_chk = QCheckBox("Capturar só o app:")
+        self.isolate_chk.setChecked(True)
+        self.isolate_chk.setToolTip(
+            "Move apenas o app escolhido (ex.: Chrome) para um sink virtual e\n"
+            "processa só ele. Sua guitarra ao vivo e todo o resto seguem tocando\n"
+            "normalmente, sem captura nem processamento."
+        )
+        # dropdown de apps tocando (modo isolado)
+        self.app_box = QComboBox()
+        self.app_box.setMinimumWidth(200)
+        self.refresh_btn = QPushButton("↻")
+        self.refresh_btn.setFixedWidth(32)
+        self.refresh_btn.setToolTip("Atualizar lista de apps tocando")
+        self.refresh_btn.clicked.connect(self._populate_apps)
+        # dropdown de monitor (modo avançado, sem isolamento)
+        self.monitor_box = QComboBox()
+        self.monitor_box.setMinimumWidth(200)
+        self._populate_monitors()
+        self._populate_apps()
+
+        self.isolate_chk.toggled.connect(self._on_isolate_toggled)
+
+        self.live_btn = QPushButton("🔴 Capturar ao vivo")
+        self.live_btn.setCheckable(True)
+        self.live_btn.toggled.connect(self._toggle_live)
+        self.live_status = QLabel("")
+
+        live_row.addWidget(self.isolate_chk)
+        live_row.addWidget(self.app_box, 1)
+        live_row.addWidget(self.refresh_btn)
+        live_row.addWidget(self.monitor_box, 1)
+        live_row.addWidget(self.live_btn)
+        live_row.addWidget(self.live_status)
+        root.addLayout(live_row)
+        self._on_isolate_toggled(True)   # estado inicial: modo isolado
 
         # --- área dos stems ---
         self.strip_row = QHBoxLayout()
@@ -198,6 +263,8 @@ class MainWindow(QWidget):
         if not source:
             QMessageBox.warning(self, "BandBox", "Informe um arquivo ou URL.")
             return
+        if self.engine:                       # sai do modo ao vivo primeiro
+            self.live_btn.setChecked(False)
         self.separate_btn.setEnabled(False)
         self.progress.setVisible(True)
         # começa indeterminada (download/modelo não têm % confiável)
@@ -238,6 +305,7 @@ class MainWindow(QWidget):
         self._clear_strips()
 
         self.mixer = StemMixer(stems, samplerate=samplerate)
+        self._target = self.mixer
         for name in self.mixer.names:
             strip = StemStrip(name, self._set_gain, self._set_mute, self._set_solo)
             self.strips[name] = strip
@@ -254,33 +322,180 @@ class MainWindow(QWidget):
             strip.setParent(None)
         self.strips.clear()
 
-    # ---- callbacks de stem ------------------------------------------------
+    # ---- callbacks de stem (roteados para o alvo ativo: mixer ou engine) --
     def _set_gain(self, name: str, gain: float) -> None:
-        if self.mixer:
-            self.mixer.set_gain(name, gain)
+        if self._target:
+            self._target.set_gain(name, gain)
 
     def _set_mute(self, name: str, muted: bool) -> None:
-        if self.mixer:
-            self.mixer.set_muted(name, muted)
+        if self._target:
+            self._target.set_muted(name, muted)
 
     def _set_solo(self, name: str, on: bool) -> None:
-        if not self.mixer:
+        if not self._target:
             return
         if on:
             for other, strip in self.strips.items():
                 if other != name and strip.solo_btn.isChecked():
                     strip.solo_btn.setChecked(False)
-            self.mixer.set_solo(name)
+            self._target.set_solo(name)
         else:
-            self.mixer.set_solo(None)
+            self._target.set_solo(None)
 
     def _apply_preset(self, preset: str) -> None:
-        if not self.mixer:
+        if not self._target:
             return
         mute_set = set(PRESETS.get(preset, []))
         for name, strip in self.strips.items():
             should_mute = name in mute_set
             strip.mute_btn.setChecked(should_mute)
+
+    # ---- captura ao vivo --------------------------------------------------
+    def _populate_monitors(self) -> None:
+        self.monitor_box.clear()
+        try:
+            from ..capture.live_source import default_monitor, list_monitors
+            default = default_monitor()
+            monitors = list_monitors()
+            # coloca o monitor padrão em primeiro
+            ordered = [default] + [m for m in monitors if m != default]
+            for m in ordered:
+                self.monitor_box.addItem(m)
+        except Exception:  # noqa: BLE001 — sem PipeWire/pactl
+            self.monitor_box.addItem("(monitor padrão)")
+
+    def _populate_apps(self) -> None:
+        """Lista os apps tocando agora; pré-seleciona um navegador se houver."""
+        self.app_box.clear()
+        try:
+            from ..capture.router import list_playback_apps
+            apps = list_playback_apps()
+        except Exception:  # noqa: BLE001
+            apps = []
+        if not apps:
+            self.app_box.addItem("(nenhum app tocando)", userData=None)
+            return
+        browser_idx = 0
+        for i, a in enumerate(apps):
+            self.app_box.addItem(f"{a['label']} (#{a['id']})", userData=a["label"])
+            if any(b in a["label"].lower() for b in ("chrom", "firefox", "brave", "edge")):
+                browser_idx = i
+        self.app_box.setCurrentIndex(browser_idx)
+
+    def _on_isolate_toggled(self, on: bool) -> None:
+        # modo isolado -> escolhe app; modo avançado -> escolhe monitor
+        self.app_box.setVisible(on)
+        self.refresh_btn.setVisible(on)
+        self.monitor_box.setVisible(not on)
+        if on:
+            self._populate_apps()
+
+    def _toggle_live(self, on: bool) -> None:
+        if on:
+            self._start_live()
+        else:
+            self._stop_live()
+
+    def _start_live(self) -> None:
+        # não misturar com o playback offline
+        if self.mixer:
+            self.mixer.stop()
+        self.separate_btn.setEnabled(False)
+        self.play_btn.setEnabled(False)
+        self.stop_btn.setEnabled(False)
+        self.live_btn.setText("Carregando…")
+        self.live_btn.setEnabled(False)
+        self.live_status.setText("Carregando modelo ao vivo…")
+
+        self.live_worker = LiveModelWorker()
+        self.live_worker.ready.connect(self._on_live_ready)
+        self.live_worker.failed.connect(self._on_live_failed)
+        self.live_worker.start()
+
+    def _on_live_failed(self, msg: str) -> None:
+        self.live_status.setText("")
+        self.live_btn.setEnabled(True)
+        self.live_btn.setText("🔴 Capturar ao vivo")
+        self.live_btn.setChecked(False)
+        self.separate_btn.setEnabled(True)
+        QMessageBox.critical(self, "Falha na captura ao vivo", msg)
+
+    def _on_live_ready(self, separator) -> None:  # noqa: ANN001
+        from ..capture.live_source import LiveCapture
+        from ..capture.router import PipeWireRouter
+        from ..engine.live_engine import LiveEngine
+
+        try:
+            output_sink = None
+            if self.isolate_chk.isChecked():
+                # sink virtual: move só o app escolhido, toca no alto-falante real
+                app_match = self.app_box.currentData()
+                if not app_match:
+                    raise RuntimeError(
+                        "Nenhum app selecionado. Comece a tocar no Chrome e clique ↻."
+                    )
+                self.router = PipeWireRouter()
+                device, output_sink = self.router.setup(app_match)
+            else:
+                # modo avançado: captura o monitor escolhido (pode ter eco)
+                device = self.monitor_box.currentText()
+                if device.startswith("("):
+                    device = None
+
+            self.capture = LiveCapture(device=device)
+            window_frames = int(LIVE_WINDOW_SEC * SAMPLE_RATE)
+            self.engine = LiveEngine(
+                separator, self.capture, window_frames=window_frames,
+                samplerate=SAMPLE_RATE, output_sink=output_sink,
+            )
+            self._target = self.engine
+
+            # monta os faders a partir dos stems do modelo
+            self._clear_strips()
+            for name in self.engine.names:
+                strip = StemStrip(name, self._set_gain, self._set_mute, self._set_solo)
+                self.strips[name] = strip
+                self.strip_row.addWidget(strip)
+            self.preset_box.setEnabled(True)
+            self.preset_box.setCurrentText("Original")
+
+            self.capture.start()
+            self.engine.start()
+        except Exception as exc:  # noqa: BLE001
+            if self.router:
+                self.router.teardown()
+                self.router = None
+            self._on_live_failed(str(exc))
+            return
+
+        self.live_btn.setEnabled(True)
+        self.live_btn.setText("■ Parar ao vivo")
+        if self.isolate_chk.isChecked():
+            src = f"só {self.app_box.currentData()}"
+        else:
+            src = "monitor"
+        self.live_status.setText(
+            f"● ao vivo · {src} (latência ~{self.engine.latency_seconds:.1f}s)"
+        )
+
+    def _stop_live(self) -> None:
+        if self.engine:
+            self.engine.stop()
+        if self.capture:
+            self.capture.stop()
+        if self.router:
+            self.router.teardown()          # restaura o sink padrão e remove o virtual
+        self.engine = None
+        self.capture = None
+        self.router = None
+        if self._target is not self.mixer:
+            self._target = None
+        self._clear_strips()
+        self.preset_box.setEnabled(False)
+        self.live_btn.setText("🔴 Capturar ao vivo")
+        self.live_btn.setChecked(False)
+        self.live_status.setText("")
+        self.separate_btn.setEnabled(True)
 
     # ---- transporte -------------------------------------------------------
     def _toggle_play(self) -> None:
@@ -310,6 +525,12 @@ class MainWindow(QWidget):
             self.play_btn.setText("▶ Play")
 
     def closeEvent(self, event):  # noqa: ANN001, N802
+        if self.engine:
+            self.engine.stop()
+        if self.capture:
+            self.capture.stop()
+        if self.router:
+            self.router.teardown()
         if self.mixer:
             self.mixer.close()
         super().closeEvent(event)

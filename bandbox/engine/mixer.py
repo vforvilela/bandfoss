@@ -13,6 +13,7 @@ import numpy as np
 import sounddevice as sd
 
 from ..config import BLOCK_SIZE, CHANNELS, SAMPLE_RATE
+from .gains import StemGains
 
 
 class StemMixer:
@@ -31,34 +32,22 @@ class StemMixer:
         self.samplerate = samplerate
         self.total_frames = length
 
-        self._gains = {name: 1.0 for name in self.names}
-        self._muted = {name: False for name in self.names}
-        self._solo: Optional[str] = None
+        self.gains = StemGains(self.names)
 
         self._pos = 0
         self._playing = False
         self._lock = threading.Lock()
         self._stream: Optional[sd.OutputStream] = None
 
-    # ---- controle de stems ------------------------------------------------
+    # ---- controle de stems (delegado ao StemGains) ------------------------
     def set_gain(self, name: str, gain: float) -> None:
-        with self._lock:
-            self._gains[name] = max(0.0, float(gain))
+        self.gains.set_gain(name, gain)
 
     def set_muted(self, name: str, muted: bool) -> None:
-        with self._lock:
-            self._muted[name] = bool(muted)
+        self.gains.set_muted(name, muted)
 
     def set_solo(self, name: Optional[str]) -> None:
-        with self._lock:
-            self._solo = name
-
-    def _effective_gain(self, name: str) -> float:
-        if self._solo is not None:
-            return self._gains[name] if name == self._solo else 0.0
-        if self._muted[name]:
-            return 0.0
-        return self._gains[name]
+        self.gains.set_solo(name)
 
     # ---- transporte -------------------------------------------------------
     def _callback(self, outdata, frames, time_info, status):  # noqa: ANN001
@@ -69,17 +58,13 @@ class StemMixer:
             start = self._pos
             end = min(start + frames, self.total_frames)
             n = end - start
-            gains = np.array(
-                [self._effective_gain(name) for name in self.names], dtype=np.float32
-            )
             self._pos = end
             reached_end = end >= self.total_frames
 
         outdata.fill(0)
         if n > 0:
-            # [n_stems, n, 2] * [n_stems, 1, 1] -> soma sobre stems -> [n, 2]
-            chunk = self._buffers[:, start:end, :]
-            mix = np.tensordot(gains, chunk, axes=(0, 0))
+            # [n_stems, n, 2] -> soma ponderada sobre stems -> [n, 2]
+            mix = self.gains.mix(self._buffers[:, start:end, :])
             np.clip(mix, -1.0, 1.0, out=mix)
             outdata[:n] = mix
 

@@ -34,10 +34,17 @@ class Separator:
     def samplerate(self) -> int:
         return getattr(self.model, "samplerate", SAMPLE_RATE)
 
-    def separate(self, pcm: np.ndarray, progress: ProgressCb = None) -> Dict[str, np.ndarray]:
+    def separate(
+        self,
+        pcm: np.ndarray,
+        progress: ProgressCb = None,
+        fast: bool = False,
+    ) -> Dict[str, np.ndarray]:
         """Separa PCM [amostras, 2] float32 em {nome_stem: [amostras, 2] float32}.
 
         `progress` recebe um float 0.0..1.0 (aproximado) durante o processamento.
+        `fast=True` (usado ao vivo): processa a janela inteira sem split/overlap,
+        priorizando latência sobre qualidade máxima.
         """
         from demucs.apply import apply_model
 
@@ -62,9 +69,9 @@ class Separator:
                 self.model,
                 wav,
                 device=self.device,
-                shifts=1,
-                split=True,
-                overlap=0.25,
+                shifts=0 if fast else 1,
+                split=not fast,
+                overlap=0.0 if fast else 0.25,
                 progress=False,
             )
 
