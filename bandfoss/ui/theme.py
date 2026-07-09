@@ -36,7 +36,6 @@ QLineEdit, QComboBox {{
     selection-color: {BG};
 }}
 QLineEdit:focus, QComboBox:focus {{ border: 1px solid {AMBER}; }}
-QComboBox::drop-down {{ border: none; width: 22px; }}
 QComboBox QAbstractItemView {{
     background: {PANEL};
     border: 1px solid {BORDER};
