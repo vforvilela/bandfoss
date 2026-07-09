@@ -23,12 +23,22 @@ class Separator:
         from demucs.pretrained import get_model
 
         self._torch = torch
-        self.device = device or ("cuda" if torch.cuda.is_available() else "cpu")
+        self.device = device or self._auto_device(torch)
         self.model = get_model(model_name).to(self.device)
         self.model.eval()
         self.model_name = model_name
         # Nomes dos stems na ordem exata que o modelo produz.
         self.sources = list(self.model.sources)
+
+    @staticmethod
+    def _auto_device(torch) -> str:
+        """Melhor acelerador disponível: CUDA (NVIDIA) -> MPS (Mac) -> CPU."""
+        if torch.cuda.is_available():
+            return "cuda"
+        mps = getattr(torch.backends, "mps", None)
+        if mps is not None and mps.is_available():
+            return "mps"
+        return "cpu"
 
     @property
     def samplerate(self) -> int:
