@@ -38,13 +38,29 @@ modules below — but it is not exposed in the UI.
 
 | Source | Mechanism | Status |
 |---|---|---|
-| Live system audio (Spotify, browser, …) | **PipeWire** monitor (`parec`) | **Shipped** |
-| Per-app isolation | virtual sink + `pactl` routing | **Shipped** |
+| Live system audio, Linux (Spotify, browser, …) | **PipeWire** monitor (`parec`) | **Shipped** |
+| Per-app isolation, Linux | virtual sink + `pactl` routing | **Shipped** |
+| Live system audio, Windows | **WASAPI loopback** (`soundcard`) | **Shipped** |
 | Local file / URL (mp3/wav/… or YouTube) | `ffmpeg` / `yt-dlp` → PCM | Offline helper (test only) |
+| Live system audio, macOS | virtual device (BlackHole) | Not implemented |
 
-**Legal/ToS note:** capturing via the PipeWire monitor (audio already decoded
-on its way to the sound card) is the most defensible route. `yt-dlp` is only
-used by the offline test helper, never as a core dependency of the app.
+Backends live behind one interface (`capture/base.py`: `CaptureBackend` +
+`BaseRingCapture`) and are picked per-OS by `capture.make_capture()`. `LiveEngine`
+only depends on `read_exact(n)`, so a new OS is a new backend, nothing else.
+
+**Per-app isolation is Linux-only.** PipeWire lets us route a single app to a
+silent virtual sink and capture only that. Windows/macOS have no clean per-app
+routing from Python, so there BandFOSS captures the whole system output.
+
+**Avoiding self-capture (feedback).** Loopback/monitor capture records everything
+going to a device, including our own output. On Linux the virtual-sink trick keeps
+the source and our output separate. On Windows the rule is enforced in the UI:
+capture device must differ from the output device (`capture.would_feedback`); a
+virtual cable (VB-CABLE) gives the cleanest routing.
+
+**Legal/ToS note:** capturing the already-decoded audio on its way to the sound
+card is the most defensible route. `yt-dlp` is only used by the offline test
+helper, never as a core dependency of the app.
 
 ### 2. Separation (core)
 
@@ -135,8 +151,11 @@ bandbox/
 │   ├── i18n.py                  # minimal EN/PT-BR strings
 │   ├── util.py                  # shared helpers (require_tool)
 │   ├── capture/
-│   │   ├── live_source.py       # PipeWire monitor → PCM               [live]
-│   │   ├── router.py            # per-app virtual-sink routing         [live]
+│   │   ├── base.py              # CaptureBackend + BaseRingCapture + FakeCapture
+│   │   ├── __init__.py          # make_capture() factory + feedback guard
+│   │   ├── live_source.py       # PipeWire monitor → PCM         [live, Linux]
+│   │   ├── router.py            # per-app virtual-sink routing   [live, Linux]
+│   │   ├── wasapi_source.py     # WASAPI loopback → PCM          [live, Windows]
 │   │   └── file_source.py       # local file / URL → PCM        [offline helper]
 │   ├── engine/
 │   │   ├── separator.py         # Demucs wrapper (GPU/CPU)
@@ -165,5 +184,6 @@ bandbox/
 
 ## Target environment
 
-- Linux, PipeWire, Python 3.10+, NVIDIA GPU (CUDA) recommended. `ffmpeg` +
-  `yt-dlp` on PATH only for the offline helper.
+- **Linux** (PipeWire) or **Windows** (WASAPI), Python 3.10+, NVIDIA GPU (CUDA)
+  recommended — also runs on CPU. macOS separation works (MPS) but live capture
+  isn't wired yet. `ffmpeg` + `yt-dlp` on PATH only for the offline helper.

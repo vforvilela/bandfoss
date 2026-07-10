@@ -46,6 +46,7 @@ class LiveEngine:
         gains: StemGains | None = None,
         start_output: bool = True,
         output_sink: str | None = None,
+        output_device: str | int | None = None,
     ):
         # Force W even and hop = W/2 (required for perfect Hann overlap-add).
         self.W = int(window_frames) - (int(window_frames) % 2)
@@ -58,6 +59,7 @@ class LiveEngine:
         self._cap = capture
         self._start_output = start_output
         self._output_sink = output_sink   # if set, play via pacat to this real sink
+        self._output_device = output_device  # sounddevice output device (name/index)
         self._pacat: subprocess.Popen | None = None
         self._pump_thread: threading.Thread | None = None
 
@@ -194,12 +196,14 @@ class LiveEngine:
             self._pump_thread = threading.Thread(target=self._pump_to_pacat, daemon=True)
             self._pump_thread.start()
         elif self._start_output:
-            # fallback (advanced mode, no isolation): sounddevice on the default
+            # sounddevice output (Windows/macOS, or Linux advanced without
+            # isolation). output_device=None uses the system default.
             self._stream = sd.OutputStream(
                 samplerate=self.samplerate,
                 channels=CHANNELS,
                 blocksize=BLOCK_SIZE,
                 dtype="float32",
+                device=self._output_device,
                 callback=self._output_callback,
             )
             self._stream.start()

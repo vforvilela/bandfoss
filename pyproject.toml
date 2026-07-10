@@ -23,6 +23,8 @@ dependencies = [
     "numpy>=1.24",
     "soundfile>=0.12",
     "sounddevice>=0.4.6",
+    # Windows system-audio capture (WASAPI loopback). Auto-installed on Windows.
+    "soundcard>=0.4; sys_platform == 'win32'",
     # UI
     "PySide6>=6.6",
 ]
@@ -31,6 +33,8 @@ dependencies = [
 # Offline helper (file/URL loading used by scripts/smoke_test.py). yt-dlp is
 # usually installed system-wide; listed here for isolated environments.
 download = ["yt-dlp>=2024.1"]
+# Windows capture (also declared as a conditional core dep; here for explicit installs).
+windows = ["soundcard>=0.4"]
 # Development: linting and tests.
 dev = ["pytest>=7", "ruff>=0.4"]
 
