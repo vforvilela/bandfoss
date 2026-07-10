@@ -6,9 +6,11 @@ welcome.
 
 ## Development setup
 
-BandFOSS runs on **Linux** (PipeWire) and **Windows** (WASAPI loopback), on
-**Python 3.10+**. The examples below use Linux; on Windows use a `python -m venv`
-env and `pip install -e .` (the `soundcard` capture dep installs automatically).
+BandFOSS runs on **Linux** (PipeWire), **Windows** (WASAPI loopback), and
+**macOS** (BlackHole), on **Python 3.10+**. The examples below use Linux; on
+Windows/macOS use a `python -m venv` env and `pip install -e .` (the `soundcard`
+Windows capture dep installs automatically; macOS uses `sounddevice`, already a
+core dep, plus a one-time BlackHole install — see the README).
 
 ```bash
 git clone https://github.com/vforvilela/bandfoss.git

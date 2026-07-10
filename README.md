@@ -38,12 +38,12 @@ Made by [vforvilela](https://github.com/vforvilela).
 - 🥁 **Play along** — mute drums (or bass, or guitar) and play over the track.
 - 🎧 **Learn by ear** — solo just the instrument you want to hear.
 
-> **Platform:** BandFOSS runs on **Linux** (PipeWire) and **Windows** (WASAPI). An
-> **NVIDIA GPU** keeps up in real time comfortably (it also runs on CPU, with more
-> delay). macOS isn't supported yet.
+> **Platform:** BandFOSS runs on **Linux** (PipeWire), **Windows** (WASAPI), and
+> **macOS** (via BlackHole). An **NVIDIA GPU** (or Apple Silicon **MPS**) keeps up in
+> real time comfortably; it also runs on CPU, with more delay.
 >
 > **Per-app isolation** (capture only Chrome, leave your live instrument untouched)
-> is Linux-only. On Windows, BandFOSS captures **system audio** as a whole.
+> is Linux-only. On Windows and macOS, BandFOSS captures **system audio** as a whole.
 
 ---
 
@@ -83,6 +83,25 @@ the same device feeds back. Two ways to avoid it:
 - Or pick an **Output** device different from the one you're capturing (e.g. capture
   the speaker, output to headphones). BandFOSS refuses to start if the two match.
 
+### macOS
+
+macOS has no built-in loopback, so BandFOSS captures a **virtual audio device**.
+
+```bash
+brew install blackhole-2ch          # free virtual audio device
+git clone https://github.com/vforvilela/bandfoss.git
+cd bandfoss
+python3 -m venv .venv && source .venv/bin/activate
+pip install -e .
+```
+
+Then, one-time audio setup:
+
+1. Set your **system output** to **BlackHole 2ch** (or a *Multi-Output Device* that
+   includes BlackHole + your speakers, if you also want to hear the original).
+2. In BandFOSS, pick **BlackHole** as **Capture** and, in *Advanced*, set **Output**
+   to your real speaker/headphones. Source → BlackHole → BandFOSS → speaker, no echo.
+
 ---
 
 ## Usage
@@ -99,10 +118,10 @@ bandfoss
 3. Move the **faders** and use **M** (mute) / **S** (solo) on each stem. Muted/soloed
    channels dim so you can see what's audible at a glance.
 
-**Windows:**
-1. Pick your **Capture** device (the output whose sound you want to split — e.g.
-   VB-CABLE, or your speakers) and, in **Advanced**, an **Output** device that's
-   *different* from it. Then click **● Capture live** and play your music.
+**Windows / macOS:**
+1. Pick your **Capture** device (Windows: VB-CABLE or your speakers; macOS:
+   BlackHole) and, in **Advanced**, an **Output** device that's *different* from it.
+   Then click **● Capture live** and play your music.
 2. Same faders + **M**/**S** as above.
 
 Stop anytime and your audio returns to normal.

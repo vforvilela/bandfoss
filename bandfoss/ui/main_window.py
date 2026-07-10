@@ -339,6 +339,10 @@ class MainWindow(QWidget):
         self.monitor_box.setEnabled(not on)
 
     # ---- platform wiring --------------------------------------------------
+    # Platforms that capture whole-system audio via a device selector (as opposed
+    # to Linux's per-app isolation).
+    _DEVICE_SELECT_OS = ("Windows", "Darwin")
+
     def _apply_platform(self) -> None:
         """Show/hide controls and enable capture based on the OS."""
         win_only = (self.capture_box, self.output_label, self.output_box, self.win_hint)
@@ -347,14 +351,15 @@ class MainWindow(QWidget):
             for w in win_only:
                 w.setVisible(False)
             self.source_label.setText(t("app_label"))
-        elif self._system == "Windows":
+        elif self._system in self._DEVICE_SELECT_OS:
             for w in linux_only:
                 w.setVisible(False)
             for w in win_only:
                 w.setVisible(True)
             self.source_label.setText(t("capture_label"))
-            self._populate_windows_devices()
-        else:  # macOS / others: no capture backend yet
+            self.win_hint.setText(t("mac_hint" if self._system == "Darwin" else "win_hint"))
+            self._populate_capture_devices()
+        else:  # unknown OS: no capture backend
             for w in win_only:
                 w.setVisible(False)
             self.app_box.setEnabled(False)
@@ -362,17 +367,23 @@ class MainWindow(QWidget):
             self.live_btn.setToolTip(t("unsupported_os_tip"))
             self.live_status.setText(t("unsupported_os"))
 
-    def _populate_windows_devices(self) -> None:
-        from ..capture import default_capture_device, list_capture_devices
-        devices = list_capture_devices("Windows")
-        default = default_capture_device("Windows")
+    def _populate_capture_devices(self) -> None:
+        from ..capture import (
+            default_capture_device,
+            list_capture_devices,
+            list_output_devices,
+        )
+        captures = list_capture_devices(self._system)
+        outputs = list_output_devices(self._system)
+        default = default_capture_device(self._system)
         self.capture_box.clear()
         self.output_box.clear()
         self.output_box.addItem(t("output_default"), userData=None)
-        for d in devices:
+        for d in captures:
             self.capture_box.addItem(d)
+        for d in outputs:
             self.output_box.addItem(d, userData=d)
-        if default and default in devices:
+        if default and default in captures:
             self.capture_box.setCurrentText(default)
 
     def _build_capture(self):
@@ -381,14 +392,21 @@ class MainWindow(QWidget):
         Returns (capture, output_sink, output_device, status_src). Raises with a
         localized message on misconfiguration (e.g. a feedback loop).
         """
-        if self._system == "Windows":
+        if self._system in self._DEVICE_SELECT_OS:
             from ..capture import default_capture_device, make_capture, would_feedback
             cap_dev = self.capture_box.currentText() or None
             out_dev = self.output_box.currentData()          # None = system default
-            effective_out = out_dev or default_capture_device("Windows")
+            # Windows loopback captures an output device, so "system default"
+            # output == the default capturable device; guard against that. On
+            # macOS the default output is a real speaker (not the captured
+            # input), so only an explicit matching selection is a loop.
+            if self._system == "Windows":
+                effective_out = out_dev or default_capture_device("Windows")
+            else:
+                effective_out = out_dev
             if would_feedback(cap_dev, effective_out):
                 raise RuntimeError(t("err_feedback"))
-            capture = make_capture(device=cap_dev, system="Windows", samplerate=SAMPLE_RATE)
+            capture = make_capture(device=cap_dev, system=self._system, samplerate=SAMPLE_RATE)
             return capture, None, out_dev, t("src_system")
 
         # Linux (PipeWire): per-app isolation or plain monitor.
