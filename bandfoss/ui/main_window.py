@@ -150,11 +150,12 @@ class MainWindow(QWidget):
         self.setStyleSheet(theme.STYLESHEET)
 
         self.engine = None                 # LiveEngine while live
-        self.capture = None                # LiveCapture while live
-        self.router = None                 # PipeWireRouter while isolating
+        self.capture = None                # capture backend while live
+        self.router = None                 # PipeWireRouter while isolating (Linux)
         self.live_worker: LiveModelWorker | None = None
         self._target = None                # active object for gains (the engine)
         self.strips: dict[str, StemStrip] = {}
+        self._system = platform.system()   # "Linux" | "Windows" | "Darwin" | …
 
         root = QVBoxLayout(self)
         root.setContentsMargins(18, 14, 18, 14)
@@ -185,21 +186,28 @@ class MainWindow(QWidget):
         header.addStretch(1)
         root.addLayout(header)
 
-        # --- live: App -> Capture ---
+        # --- live: source -> Capture ---
         live_row = QHBoxLayout()
-        live_row.addWidget(QLabel(t("app_label")))
+        self.source_label = QLabel(t("app_label"))
+        live_row.addWidget(self.source_label)
+        # Linux: per-app selector. Windows: loopback-device selector (shown by
+        # _apply_platform). Both live in this row; only one is visible.
         self.app_box = AppComboBox(self._populate_apps)
         self.app_box.setMinimumWidth(240)
         self.app_box.setEditable(True)          # lets you type an app not yet playing
         self.app_box.setInsertPolicy(QComboBox.NoInsert)
         self.app_box.lineEdit().setPlaceholderText(t("app_placeholder"))
         self._populate_apps()
+        self.capture_box = QComboBox()          # Windows capture device
+        self.capture_box.setMinimumWidth(240)
+        self.capture_box.setVisible(False)
         self.live_btn = QPushButton(t("capture_start"))
         self.live_btn.setObjectName("recordBtn")
         self.live_btn.setCheckable(True)
         self.live_btn.toggled.connect(self._toggle_live)
         self.live_status = QLabel("")
         live_row.addWidget(self.app_box, 1)
+        live_row.addWidget(self.capture_box, 1)
         live_row.addWidget(self.live_btn)
         live_row.addWidget(self.live_status)
         root.addLayout(live_row)
@@ -234,12 +242,7 @@ class MainWindow(QWidget):
         footer.setStyleSheet("font-size: 11px;")
         root.addWidget(footer)
 
-        # live capture depends on PipeWire (Linux).
-        if platform.system() != "Linux":
-            self.app_box.setEnabled(False)
-            self.live_btn.setEnabled(False)
-            self.live_btn.setToolTip(t("linux_only_tip"))
-            self.live_status.setText(t("requires_linux"))
+        self._apply_platform()
 
     # ---- advanced panel ---------------------------------------------------
     def _build_advanced_panel(self) -> QWidget:
@@ -264,16 +267,28 @@ class MainWindow(QWidget):
         grid.addWidget(QLabel(t("latency_label")), 1, 0)
         grid.addWidget(self.latency_box, 1, 1)
 
+        # ---- Linux-only: per-app isolation + monitor fallback ----
         self.isolate_chk = QCheckBox(t("isolate"))
         self.isolate_chk.setChecked(True)
         self.isolate_chk.setToolTip(t("isolate_tip"))
         self.isolate_chk.toggled.connect(self._on_isolate_toggled)
         grid.addWidget(self.isolate_chk, 2, 0, 1, 2)
 
+        self.monitor_label = QLabel(t("monitor_label"))
         self.monitor_box = QComboBox()
         self._populate_monitors()
-        grid.addWidget(QLabel(t("monitor_label")), 3, 0)
+        grid.addWidget(self.monitor_label, 3, 0)
         grid.addWidget(self.monitor_box, 3, 1)
+
+        # ---- Windows-only: output-device selector + hint ----
+        self.output_label = QLabel(t("output_label"))
+        self.output_box = QComboBox()
+        grid.addWidget(self.output_label, 4, 0)
+        grid.addWidget(self.output_box, 4, 1)
+        self.win_hint = QLabel(t("win_hint"))
+        self.win_hint.setWordWrap(True)
+        self.win_hint.setStyleSheet(f"color: {theme.MUTED}; font-size: 11px;")
+        grid.addWidget(self.win_hint, 5, 0, 1, 2)
 
         grid.setColumnStretch(1, 1)
         self.adv_panel.setVisible(False)
@@ -323,6 +338,79 @@ class MainWindow(QWidget):
         self.app_box.setEnabled(on)
         self.monitor_box.setEnabled(not on)
 
+    # ---- platform wiring --------------------------------------------------
+    def _apply_platform(self) -> None:
+        """Show/hide controls and enable capture based on the OS."""
+        win_only = (self.capture_box, self.output_label, self.output_box, self.win_hint)
+        linux_only = (self.app_box, self.isolate_chk, self.monitor_label, self.monitor_box)
+        if self._system == "Linux":
+            for w in win_only:
+                w.setVisible(False)
+            self.source_label.setText(t("app_label"))
+        elif self._system == "Windows":
+            for w in linux_only:
+                w.setVisible(False)
+            for w in win_only:
+                w.setVisible(True)
+            self.source_label.setText(t("capture_label"))
+            self._populate_windows_devices()
+        else:  # macOS / others: no capture backend yet
+            for w in win_only:
+                w.setVisible(False)
+            self.app_box.setEnabled(False)
+            self.live_btn.setEnabled(False)
+            self.live_btn.setToolTip(t("unsupported_os_tip"))
+            self.live_status.setText(t("unsupported_os"))
+
+    def _populate_windows_devices(self) -> None:
+        from ..capture import default_capture_device, list_capture_devices
+        devices = list_capture_devices("Windows")
+        default = default_capture_device("Windows")
+        self.capture_box.clear()
+        self.output_box.clear()
+        self.output_box.addItem(t("output_default"), userData=None)
+        for d in devices:
+            self.capture_box.addItem(d)
+            self.output_box.addItem(d, userData=d)
+        if default and default in devices:
+            self.capture_box.setCurrentText(default)
+
+    def _build_capture(self):
+        """Create the capture backend + output config for the current OS.
+
+        Returns (capture, output_sink, output_device, status_src). Raises with a
+        localized message on misconfiguration (e.g. a feedback loop).
+        """
+        if self._system == "Windows":
+            from ..capture import default_capture_device, make_capture, would_feedback
+            cap_dev = self.capture_box.currentText() or None
+            out_dev = self.output_box.currentData()          # None = system default
+            effective_out = out_dev or default_capture_device("Windows")
+            if would_feedback(cap_dev, effective_out):
+                raise RuntimeError(t("err_feedback"))
+            capture = make_capture(device=cap_dev, system="Windows", samplerate=SAMPLE_RATE)
+            return capture, None, out_dev, t("src_system")
+
+        # Linux (PipeWire): per-app isolation or plain monitor.
+        from ..capture.live_source import LiveCapture
+        from ..capture.router import PipeWireRouter
+        if self.isolate_chk.isChecked():
+            app_match = self.app_box.currentData()
+            if not app_match:
+                app_match = re.sub(r"\s*\(#\d+\)\s*$", "",
+                                   self.app_box.currentText()).strip()
+            if not app_match:
+                raise RuntimeError(t("err_no_app"))
+            self.router = PipeWireRouter()
+            device, output_sink = self.router.setup(app_match)
+            src = t("src_only", app=self.app_box.currentData() or self.app_box.currentText())
+            return LiveCapture(device=device), output_sink, None, src
+
+        device = self.monitor_box.currentText()
+        if device.startswith("("):
+            device = None
+        return LiveCapture(device=device), None, None, t("src_monitor")
+
     # ---- live capture -----------------------------------------------------
     def _toggle_live(self, on: bool) -> None:
         if on:
@@ -353,32 +441,17 @@ class MainWindow(QWidget):
         QMessageBox.critical(self, t("err_capture_title"), msg)
 
     def _on_live_ready(self, separator) -> None:  # noqa: ANN001
-        from ..capture.live_source import LiveCapture
-        from ..capture.router import PipeWireRouter
         from ..engine.live_engine import LiveEngine
 
         try:
-            output_sink = None
-            if self.isolate_chk.isChecked():
-                app_match = self.app_box.currentData()
-                if not app_match:
-                    app_match = re.sub(r"\s*\(#\d+\)\s*$", "",
-                                       self.app_box.currentText()).strip()
-                if not app_match:
-                    raise RuntimeError(t("err_no_app"))
-                self.router = PipeWireRouter()
-                device, output_sink = self.router.setup(app_match)
-            else:
-                device = self.monitor_box.currentText()
-                if device.startswith("("):
-                    device = None
-
-            self.capture = LiveCapture(device=device)
+            capture, output_sink, output_device, src = self._build_capture()
+            self.capture = capture
             window_sec = self.latency_box.currentData()
             window_frames = int(window_sec * SAMPLE_RATE)
             self.engine = LiveEngine(
                 separator, self.capture, window_frames=window_frames,
                 samplerate=SAMPLE_RATE, output_sink=output_sink,
+                output_device=output_device,
             )
             self._target = self.engine
 
@@ -402,11 +475,6 @@ class MainWindow(QWidget):
 
         self.live_btn.setEnabled(True)
         self.live_btn.setText(t("capture_stop"))
-        if self.isolate_chk.isChecked():
-            app = self.app_box.currentData() or self.app_box.currentText()
-            src = t("src_only", app=app)
-        else:
-            src = t("src_monitor")
         self.live_status.setText(t("status_live", src=src, sec=self.engine.latency_seconds))
 
     def _stop_live(self) -> None:

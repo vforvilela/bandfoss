@@ -38,13 +38,18 @@ Made by [vforvilela](https://github.com/vforvilela).
 - 🥁 **Play along** — mute drums (or bass, or guitar) and play over the track.
 - 🎧 **Learn by ear** — solo just the instrument you want to hear.
 
-> **Platform:** live capture uses **PipeWire**, so BandFOSS runs on **Linux**. An
+> **Platform:** BandFOSS runs on **Linux** (PipeWire) and **Windows** (WASAPI). An
 > **NVIDIA GPU** keeps up in real time comfortably (it also runs on CPU, with more
-> delay).
+> delay). macOS isn't supported yet.
+>
+> **Per-app isolation** (capture only Chrome, leave your live instrument untouched)
+> is Linux-only. On Windows, BandFOSS captures **system audio** as a whole.
 
 ---
 
-## Install (Linux)
+## Install
+
+### Linux
 
 ```bash
 # system deps (Debian/Ubuntu — use your distro's package manager)
@@ -58,6 +63,26 @@ python3 -m venv .venv && source .venv/bin/activate
 pip install -e .
 ```
 
+### Windows
+
+```powershell
+git clone https://github.com/vforvilela/bandfoss.git
+cd bandfoss
+python -m venv .venv
+.venv\Scripts\activate
+pip install -e .          # pulls in `soundcard` for WASAPI capture automatically
+```
+
+**Avoiding echo (important on Windows):** WASAPI loopback records *everything*
+playing on a device — including BandFOSS's own output — so capturing and playing to
+the same device feeds back. Two ways to avoid it:
+
+- **Cleanest:** install a free virtual cable ([**VB-CABLE**](https://vb-audio.com/Cable/)),
+  set it as your Windows output, pick it as **Capture** in BandFOSS, and set **Output**
+  (in *Advanced*) to your real speaker. Source → cable → BandFOSS → speaker, no echo.
+- Or pick an **Output** device different from the one you're capturing (e.g. capture
+  the speaker, output to headphones). BandFOSS refuses to start if the two match.
+
 ---
 
 ## Usage
@@ -66,12 +91,19 @@ pip install -e .
 bandfoss
 ```
 
+**Linux:**
 1. Start playing music in **Chrome** (or any app).
 2. In **Source**, pick/type the app (e.g. `Chrome`) and click **● Capture live**.
    - You can click **before** hitting play: as soon as the app starts, BandFOSS grabs
      its audio automatically.
 3. Move the **faders** and use **M** (mute) / **S** (solo) on each stem. Muted/soloed
    channels dim so you can see what's audible at a glance.
+
+**Windows:**
+1. Pick your **Capture** device (the output whose sound you want to split — e.g.
+   VB-CABLE, or your speakers) and, in **Advanced**, an **Output** device that's
+   *different* from it. Then click **● Capture live** and play your music.
+2. Same faders + **M**/**S** as above.
 
 Stop anytime and your audio returns to normal.
 

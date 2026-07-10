@@ -6,7 +6,9 @@ welcome.
 
 ## Development setup
 
-BandFOSS targets **Linux + PipeWire** (live capture) and **Python 3.10+**.
+BandFOSS runs on **Linux** (PipeWire) and **Windows** (WASAPI loopback), on
+**Python 3.10+**. The examples below use Linux; on Windows use a `python -m venv`
+env and `pip install -e .` (the `soundcard` capture dep installs automatically).
 
 ```bash
 git clone https://github.com/vforvilela/bandfoss.git

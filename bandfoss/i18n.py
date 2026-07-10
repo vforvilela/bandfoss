@@ -24,17 +24,32 @@ _STRINGS = {
         "loading_model": "Loading live model…",
         "requires_linux": "requires Linux (PipeWire)",
         "linux_only_tip": "BandFOSS captures system audio via PipeWire — Linux only.",
+        "unsupported_os": "live capture needs Linux (PipeWire) or Windows (WASAPI)",
+        "unsupported_os_tip": "Live capture is available on Linux and Windows.",
         "status_live": "● live · {src} (latency ~{sec:.1f}s)",
         "src_only": "{app} only",
         "src_monitor": "monitor",
+        "src_system": "system audio",
         "err_capture_title": "Live capture failed",
         "err_no_app": "Type the source app to capture (e.g. Chrome).",
+        "err_feedback": (
+            "Capture and output are the same device — that would echo.\n"
+            "Pick a different Output, or route the source through a virtual\n"
+            "cable (VB-CABLE) and output to your real speaker."
+        ),
         # advanced
         "advanced": "ADVANCED",
         "model_label": "Model:",
         "latency_label": "Latency:",
         "isolate": "Isolate by app (recommended)",
         "monitor_label": "Monitor (no isolation):",
+        "capture_label": "Capture:",
+        "output_label": "Output:",
+        "output_default": "(system default)",
+        "win_hint": (
+            "Tip: capture a virtual cable (VB-CABLE) and output to your speaker "
+            "to avoid echo."
+        ),
         "model_tip": (
             "Fast (4 stems): drums/bass/vocals/other.\n"
             "Guitar (6 stems): adds guitar and piano — lets you mute the recorded\n"
@@ -73,16 +88,31 @@ _STRINGS = {
         "loading_model": "Carregando modelo ao vivo…",
         "requires_linux": "requer Linux (PipeWire)",
         "linux_only_tip": "BandFOSS captura o áudio do sistema via PipeWire — só no Linux.",
+        "unsupported_os": "a captura ao vivo requer Linux (PipeWire) ou Windows (WASAPI)",
+        "unsupported_os_tip": "A captura ao vivo está disponível no Linux e no Windows.",
         "status_live": "● ao vivo · {src} (latência ~{sec:.1f}s)",
         "src_only": "só {app}",
         "src_monitor": "monitor",
+        "src_system": "áudio do sistema",
         "err_capture_title": "Falha na captura ao vivo",
         "err_no_app": "Informe o app a capturar (ex.: Chrome).",
+        "err_feedback": (
+            "Captura e saída são o mesmo dispositivo — isso causaria eco.\n"
+            "Escolha uma Saída diferente, ou roteie a fonte por um cabo\n"
+            "virtual (VB-CABLE) e use o alto-falante real como saída."
+        ),
         "advanced": "AVANÇADO",
         "model_label": "Modelo:",
         "latency_label": "Latência:",
         "isolate": "Isolar por app (recomendado)",
         "monitor_label": "Monitor (sem isolar):",
+        "capture_label": "Captura:",
+        "output_label": "Saída:",
+        "output_default": "(saída padrão)",
+        "win_hint": (
+            "Dica: capture um cabo virtual (VB-CABLE) e use seu alto-falante "
+            "como saída para evitar eco."
+        ),
         "model_tip": (
             "Rápido (4 stems): bateria/baixo/vocal/outros.\n"
             "Guitarra (6 stems): adiciona guitarra e piano — permite mutar a guitarra\n"
