@@ -3,7 +3,7 @@
 **Real-time stem separation for *any* audio playing on your computer.**
 
 <p align="center">
-  <img src="docs/screenshot.png"
+  <img src="docs/screenshot-en.png"
        alt="BandFOSS live mixer: six stem faders (vocals, drums, bass, guitar, piano, other) with mute/solo, vocals muted"
        width="760">
 </p>

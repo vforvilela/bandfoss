@@ -1,0 +1,10 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(/home/vilela/Code/bandbox/.venv/bin/python -)",
+      "Bash(.venv/bin/pip uninstall *)",
+      "Bash(.venv/bin/pip install *)",
+      "Bash(git mv *)"
+    ]
+  }
+}
