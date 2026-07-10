@@ -50,6 +50,10 @@ _STRINGS = {
             "Tip: capture a virtual cable (VB-CABLE) and output to your speaker "
             "to avoid echo."
         ),
+        "mac_hint": (
+            "Tip: install BlackHole, set it as system output, capture it here, "
+            "and output to your speaker."
+        ),
         "model_tip": (
             "Fast (4 stems): drums/bass/vocals/other.\n"
             "Guitar (6 stems): adds guitar and piano — lets you mute the recorded\n"
@@ -112,6 +116,10 @@ _STRINGS = {
         "win_hint": (
             "Dica: capture um cabo virtual (VB-CABLE) e use seu alto-falante "
             "como saída para evitar eco."
+        ),
+        "mac_hint": (
+            "Dica: instale o BlackHole, defina-o como saída do sistema, capture-o "
+            "aqui e use seu alto-falante como saída."
         ),
         "model_tip": (
             "Rápido (4 stems): bateria/baixo/vocal/outros.\n"

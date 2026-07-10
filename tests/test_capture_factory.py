@@ -16,6 +16,12 @@ def test_make_capture_windows_returns_wasapi_without_soundcard():
     assert cap.device_name == "Speakers"
 
 
+def test_make_capture_macos_returns_coreaudio():
+    cap = make_capture(device="BlackHole 2ch", system="Darwin")
+    assert type(cap).__name__ == "CoreAudioCapture"
+    assert cap.device_name == "BlackHole 2ch"
+
+
 def test_make_capture_linux_returns_pipewire():
     cap = make_capture(device="foo.monitor", system="Linux")
     assert type(cap).__name__ == "LiveCapture"
@@ -23,7 +29,7 @@ def test_make_capture_linux_returns_pipewire():
 
 def test_make_capture_unsupported_os_raises():
     with pytest.raises(RuntimeError):
-        make_capture(system="Darwin")
+        make_capture(system="Plan9")
 
 
 def test_would_feedback():

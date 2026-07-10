@@ -41,8 +41,8 @@ modules below — but it is not exposed in the UI.
 | Live system audio, Linux (Spotify, browser, …) | **PipeWire** monitor (`parec`) | **Shipped** |
 | Per-app isolation, Linux | virtual sink + `pactl` routing | **Shipped** |
 | Live system audio, Windows | **WASAPI loopback** (`soundcard`) | **Shipped** |
+| Live system audio, macOS | virtual device (BlackHole) via `sounddevice` input | **Shipped** |
 | Local file / URL (mp3/wav/… or YouTube) | `ffmpeg` / `yt-dlp` → PCM | Offline helper (test only) |
-| Live system audio, macOS | virtual device (BlackHole) | Not implemented |
 
 Backends live behind one interface (`capture/base.py`: `CaptureBackend` +
 `BaseRingCapture`) and are picked per-OS by `capture.make_capture()`. `LiveEngine`
@@ -54,9 +54,11 @@ routing from Python, so there BandFOSS captures the whole system output.
 
 **Avoiding self-capture (feedback).** Loopback/monitor capture records everything
 going to a device, including our own output. On Linux the virtual-sink trick keeps
-the source and our output separate. On Windows the rule is enforced in the UI:
-capture device must differ from the output device (`capture.would_feedback`); a
-virtual cable (VB-CABLE) gives the cleanest routing.
+the source and our output separate. On Windows/macOS the rule is enforced in the
+UI: the capture device must differ from the output device
+(`capture.would_feedback`). A virtual device (VB-CABLE on Windows, BlackHole on
+macOS) set as the system output, captured while we play to the real speaker, gives
+the cleanest routing.
 
 **Legal/ToS note:** capturing the already-decoded audio on its way to the sound
 card is the most defensible route. `yt-dlp` is only used by the offline test
@@ -156,6 +158,7 @@ bandbox/
 │   │   ├── live_source.py       # PipeWire monitor → PCM         [live, Linux]
 │   │   ├── router.py            # per-app virtual-sink routing   [live, Linux]
 │   │   ├── wasapi_source.py     # WASAPI loopback → PCM          [live, Windows]
+│   │   ├── coreaudio_source.py  # BlackHole input → PCM          [live, macOS]
 │   │   └── file_source.py       # local file / URL → PCM        [offline helper]
 │   ├── engine/
 │   │   ├── separator.py         # Demucs wrapper (GPU/CPU)
@@ -184,6 +187,6 @@ bandbox/
 
 ## Target environment
 
-- **Linux** (PipeWire) or **Windows** (WASAPI), Python 3.10+, NVIDIA GPU (CUDA)
-  recommended — also runs on CPU. macOS separation works (MPS) but live capture
-  isn't wired yet. `ffmpeg` + `yt-dlp` on PATH only for the offline helper.
+- **Linux** (PipeWire), **Windows** (WASAPI), or **macOS** (BlackHole), Python
+  3.10+, NVIDIA GPU (CUDA) or Apple **MPS** recommended — also runs on CPU.
+  `ffmpeg` + `yt-dlp` on PATH only for the offline helper.
