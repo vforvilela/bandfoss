@@ -4,7 +4,7 @@
 
 <p align="center">
   <img src="docs/screenshot.png"
-       alt="BandFOSS splitting a live YouTube Music stream into six stems with per-stem faders and mute/solo"
+       alt="BandFOSS live mixer: six stem faders (vocals, drums, bass, guitar, piano, other) with mute/solo, vocals muted"
        width="760">
 </p>
 
