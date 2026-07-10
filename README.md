@@ -2,6 +2,13 @@
 
 **Real-time stem separation for *any* audio playing on your computer.**
 
+<p align="center">
+  <img src="docs/screenshot.png"
+       alt="BandFOSS splitting a live YouTube Music stream into six stems with per-stem faders and mute/solo"
+       width="760">
+</p>
+
+
 Point BandFOSS at whatever is streaming — Spotify, YouTube, Apple Music, a browser
 tab, a game, a video call — and it splits the sound into **vocals, drums, bass,
 guitar, keys and more, live**, so you can mute or solo any part on the fly. No files,
